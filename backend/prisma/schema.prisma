@@ -9,3 +9,32 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model User {
+  id            String   @id @default(uuid()) @db.Uuid
+  googleUserId  String   @unique @map("google_user_id")
+  email         String
+  name          String?
+  pictureUrl    String?  @map("picture_url")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  sessions UserSession[]
+
+  @@map("users")
+}
+
+model UserSession {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  sessionId       String   @unique @default(uuid()) @map("session_id") @db.Uuid
+  accessToken     String   @map("access_token")
+  refreshToken    String?  @map("refresh_token")
+  tokenExpiresAt  DateTime @map("token_expires_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+}
