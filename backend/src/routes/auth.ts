@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
+dotenv.config({ path: '.env.oauth', override: true });
 
 const router = Router();
 
