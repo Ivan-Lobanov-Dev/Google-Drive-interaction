@@ -78,6 +78,37 @@ Google Drive → Extractor → Chunker → Embedder → Vector Store → Retriev
 
 # 2. Data Model / Storage Design:
 
+## Schema for user authentication and sessions
+
+Table name: users
+
+| Column           | Type        | Description                        |
+| ---------------- | ----------- | ---------------------------------- |
+| id               | UUID (PK)   | Internal user ID                   |
+| google_user_id   | string (UK) | Google OAuth user ID               |
+| email            | string      | User email address                 |
+| name             | string      | User display name (optional)       |
+| picture_url      | string      | User profile picture URL (optional)|
+| created_at       | timestamp   | Account creation time              |
+| updated_at       | timestamp   | Last update time                   |
+
+- **Note:** Index `google_user_id` and `email` for fast user lookups during authentication.
+
+Table name: user_sessions
+
+| Column           | Type        | Description                        |
+| ---------------- | ----------- | ---------------------------------- |
+| id               | UUID (PK)   | Session ID                         |
+| user_id          | UUID (FK)   | Reference to users.id              |
+| session_id       | UUID (UK)   | Unique session identifier          |
+| access_token     | string      | Google OAuth access token          |
+| refresh_token    | string      | Google OAuth refresh token (optional)|
+| token_expires_at | timestamp   | Access token expiration time       |
+| created_at       | timestamp   | Session creation time              |
+| updated_at       | timestamp   | Last session update time           |
+
+- **Note:** Sessions are used to maintain user authentication state and manage OAuth token refresh cycles.
+
 ## Schema for storing file metadata and content chunks
 
 Table name: files_metadata
@@ -131,7 +162,65 @@ pgvector for PostgreSQL
 
 # 3. API Specification:
 
-## **POST** /rag/ingest-plan
+## Authentication Endpoints
+
+### **GET** /auth/google
+
+Initiates Google OAuth authentication flow.
+
+- **Response:**
+```json
+{
+  "authUrl": "https://accounts.google.com/o/oauth2/v2/auth?client_id=..."
+}
+```
+
+### **GET** /auth/google/callback
+
+Handles Google OAuth callback after user authorization.
+
+- **Query Parameters:**
+  - `code` (string): Authorization code from Google
+  - `state` (string, optional): State parameter for security
+
+- **Response:** Redirects to frontend with success parameter
+- **Side Effects:**
+  - Creates or updates user in database
+  - Creates new session with OAuth tokens
+  - Sets HTTP-only session cookie
+
+### **GET** /auth/me
+
+Returns current authenticated user information.
+
+- **Authentication:** Required (session cookie)
+- **Response:**
+```json
+{
+  "user": {
+    "id": "user-uuid",
+    "email": "user@example.com",
+    "name": "User Name",
+    "pictureUrl": "https://example.com/avatar.jpg"
+  }
+}
+```
+
+### **POST** /auth/logout
+
+Logs out current user and invalidates session.
+
+- **Authentication:** Required (session cookie)
+- **Response:**
+```json
+{
+  "message": "Logged out successfully"
+}
+```
+
+## RAG Endpoints
+
+### **POST** /rag/ingest-plan
 
 - Request: 
 {
@@ -168,14 +257,18 @@ pgvector for PostgreSQL
 
 # 4. Security & Access Control:
 
-- **OAuth2 tokens** are used at the user level.
-- **ACL check** is performed before returning chunks.
+- **OAuth2 authentication** via Google OAuth 2.0 with refresh token management
+- **Session management** using secure HTTP-only cookies with UUID-based session IDs
+- **Token refresh** automatically handled when access tokens expire
+- **User identification** through `users` table linked to Google OAuth user IDs
+- **ACL check** is performed before returning chunks based on user sessions and file ownership
 - **Audit logging** stores:
-  - who made the request (`userId`)
+  - who made the request (`userId` from sessions table)
   - timestamp
   - which files/chunks were accessed
   - user query and AI response
-- **Metadata analytics**: global queries are safe because they do not expose file content.
+- **Metadata analytics**: global queries are safe because they do not expose file content
+- **Environment security**: OAuth credentials stored in separate `.env.oauth` file excluded from version control
 
 # 5. Scalability & Performance
 
