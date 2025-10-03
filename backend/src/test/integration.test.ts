@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { prisma } from '../lib/prisma.js'
+import type { MockUser, MockUserSession } from '../types/test.js'
 
 // Mock Prisma client for integration tests
 vi.mock('../lib/prisma.js', () => ({
@@ -39,17 +40,17 @@ describe('Database Integration Tests', () => {
         email: 'test@example.com',
         name: 'Test User',
         pictureUrl: 'https://example.com/avatar.jpg',
-        googleId: 'google-user-123'
+        googleUserId: 'google-user-123'
       }
 
-      const mockUser = {
+      const mockUser: MockUser = {
         id: 'user-123',
         ...userData,
         createdAt: new Date(),
         updatedAt: new Date()
       }
 
-      vi.mocked(prisma.user.create).mockResolvedValue(mockUser as any)
+      vi.mocked(prisma.user.create).mockResolvedValue(mockUser)
 
       const result = await prisma.user.create({
         data: userData
@@ -62,25 +63,25 @@ describe('Database Integration Tests', () => {
     })
 
     it('should find user by email', async () => {
-      const mockUser = {
+      const mockUser: MockUser = {
         id: 'user-123',
         email: 'test@example.com',
         name: 'Test User',
         pictureUrl: 'https://example.com/avatar.jpg',
-        googleId: 'google-user-123',
+        googleUserId: 'google-user-123',
         createdAt: new Date(),
         updatedAt: new Date()
       }
 
-      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as any)
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser)
 
       const result = await prisma.user.findUnique({
-        where: { email: 'test@example.com' }
+        where: { googleUserId: 'google-user-123' }
       })
 
       expect(result).toEqual(mockUser)
       expect(prisma.user.findUnique).toHaveBeenCalledWith({
-        where: { email: 'test@example.com' }
+        where: { googleUserId: 'google-user-123' }
       })
     })
 
@@ -89,20 +90,20 @@ describe('Database Integration Tests', () => {
         email: 'test@example.com',
         name: 'Test User Updated',
         pictureUrl: 'https://example.com/new-avatar.jpg',
-        googleId: 'google-user-123'
+        googleUserId: 'google-user-123'
       }
 
-      const mockUser = {
+      const mockUser: MockUser = {
         id: 'user-123',
         ...userData,
         createdAt: new Date(),
         updatedAt: new Date()
       }
 
-      vi.mocked(prisma.user.upsert).mockResolvedValue(mockUser as any)
+      vi.mocked(prisma.user.upsert).mockResolvedValue(mockUser)
 
       const result = await prisma.user.upsert({
-        where: { email: userData.email },
+        where: { googleUserId: userData.googleUserId },
         update: {
           name: userData.name,
           pictureUrl: userData.pictureUrl
@@ -112,7 +113,7 @@ describe('Database Integration Tests', () => {
 
       expect(result).toEqual(mockUser)
       expect(prisma.user.upsert).toHaveBeenCalledWith({
-        where: { email: userData.email },
+        where: { googleUserId: userData.googleUserId },
         update: {
           name: userData.name,
           pictureUrl: userData.pictureUrl
@@ -125,7 +126,7 @@ describe('Database Integration Tests', () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValue(null)
 
       const result = await prisma.user.findUnique({
-        where: { email: 'nonexistent@example.com' }
+        where: { googleUserId: 'nonexistent-google-user' }
       })
 
       expect(result).toBeNull()
@@ -142,14 +143,14 @@ describe('Database Integration Tests', () => {
         tokenExpiresAt: new Date(Date.now() + 3600000)
       }
 
-      const mockSession = {
+      const mockSession: MockUserSession = {
         id: 'session-123',
         ...sessionData,
         createdAt: new Date(),
         updatedAt: new Date()
       }
 
-      vi.mocked(prisma.userSession.create).mockResolvedValue(mockSession as any)
+      vi.mocked(prisma.userSession.create).mockResolvedValue(mockSession)
 
       const result = await prisma.userSession.create({
         data: sessionData
@@ -179,7 +180,7 @@ describe('Database Integration Tests', () => {
         }
       }
 
-      vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as any)
+      vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as MockUserSession)
 
       const result = await prisma.userSession.findUnique({
         where: { sessionId: 'session-uuid-123' },
@@ -200,7 +201,7 @@ describe('Database Integration Tests', () => {
         tokenExpiresAt: new Date(Date.now() + 7200000)
       }
 
-      const mockUpdatedSession = {
+      const mockUpdatedSession: MockUserSession = {
         id: 'session-123',
         sessionId: 'session-uuid-123',
         userId: 'user-123',
@@ -209,7 +210,7 @@ describe('Database Integration Tests', () => {
         updatedAt: new Date()
       }
 
-      vi.mocked(prisma.userSession.update).mockResolvedValue(mockUpdatedSession as any)
+      vi.mocked(prisma.userSession.update).mockResolvedValue(mockUpdatedSession)
 
       const result = await prisma.userSession.update({
         where: { sessionId: 'session-uuid-123' },
@@ -224,7 +225,7 @@ describe('Database Integration Tests', () => {
     })
 
     it('should delete session', async () => {
-      const mockDeletedSession = {
+      const mockDeletedSession: MockUserSession = {
         id: 'session-123',
         sessionId: 'session-uuid-123',
         userId: 'user-123',
@@ -235,7 +236,7 @@ describe('Database Integration Tests', () => {
         updatedAt: new Date()
       }
 
-      vi.mocked(prisma.userSession.delete).mockResolvedValue(mockDeletedSession as any)
+      vi.mocked(prisma.userSession.delete).mockResolvedValue(mockDeletedSession)
 
       const result = await prisma.userSession.delete({
         where: { sessionId: 'session-uuid-123' }
@@ -276,7 +277,7 @@ describe('Database Integration Tests', () => {
       expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({
         where: {
           tokenExpiresAt: {
-            lt: expect.any(Date)
+            lt: expect.any(Date) as Date
           }
         }
       })
@@ -291,7 +292,7 @@ describe('Database Integration Tests', () => {
         data: {
           email: 'test@example.com',
           name: 'Test User',
-          googleId: 'google-123'
+          googleUserId: 'google-123'
         }
       })).rejects.toThrow('Connection timeout')
     })
@@ -303,7 +304,7 @@ describe('Database Integration Tests', () => {
         data: {
           email: 'duplicate@example.com',
           name: 'Test User',
-          googleId: 'google-123'
+          googleUserId: 'google-123'
         }
       })).rejects.toThrow('Unique constraint failed')
     })
@@ -328,7 +329,7 @@ describe('Database Integration Tests', () => {
         email: 'test@example.com',
         name: 'Test User',
         pictureUrl: 'https://example.com/avatar.jpg',
-        googleId: 'google-user-123'
+        googleUserId: 'google-user-123'
       }
 
       const sessionData = {
@@ -338,14 +339,14 @@ describe('Database Integration Tests', () => {
         tokenExpiresAt: new Date(Date.now() + 3600000)
       }
 
-      const mockUser = {
+      const mockUser: MockUser = {
         id: 'user-123',
         ...userData,
         createdAt: new Date(),
         updatedAt: new Date()
       }
 
-      const mockSession = {
+      const mockSession: MockUserSession = {
         id: 'session-123',
         ...sessionData,
         userId: 'user-123',
@@ -353,8 +354,8 @@ describe('Database Integration Tests', () => {
         updatedAt: new Date()
       }
 
-      vi.mocked(prisma.user.create).mockResolvedValue(mockUser as any)
-      vi.mocked(prisma.userSession.create).mockResolvedValue(mockSession as any)
+      vi.mocked(prisma.user.create).mockResolvedValue(mockUser)
+      vi.mocked(prisma.userSession.create).mockResolvedValue(mockSession)
 
       // Simulate transaction-like behavior
       const user = await prisma.user.create({ data: userData })

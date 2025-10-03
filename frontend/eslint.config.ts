@@ -21,22 +21,22 @@ export default defineConfigWithVueTs(
   vueTsConfigs.recommended,
   skipFormatting,
   
-  // Дополнительная конфигурация для запрета дефолтных экспортов
+  // Additional configuration to prohibit default exports
   {
     plugins: {
       'import': importPlugin,
     },
     rules: {
-      // Запрет дефолтных экспортов в TypeScript файлах
+      // Prohibit default exports in TypeScript files
       'import/no-default-export': 'error',
       
-      // Отключение правил, которые поощряют дефолтные экспорты
+      // Disable rules that encourage default exports
       'import/prefer-default-export': 'off',
       'import/no-named-as-default': 'off',
     },
   },
   
-  // Отдельная конфигурация для Vue файлов - разрешить default export
+  // Separate configuration for Vue files - allow default export
   {
     files: ['**/*.vue'],
     rules: {
@@ -44,7 +44,7 @@ export default defineConfigWithVueTs(
     },
   },
   
-  // Отдельная конфигурация для конфигурационных файлов - разрешить default export
+  // Separate configuration for config files - allow default export
   {
     files: ['**/*.config.{js,ts}', '**/eslint.config.*', '**/vite.config.*'],
     rules: {

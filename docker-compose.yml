@@ -19,5 +19,24 @@ services:
       timeout: 5s
       retries: 5
 
+  postgres-test:
+    image: pgvector/pgvector:pg16
+    container_name: gdi-postgres-test
+    environment:
+      POSTGRES_DB: gdi_test_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      - ./backend/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gdi_test_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
+  postgres_test_data:

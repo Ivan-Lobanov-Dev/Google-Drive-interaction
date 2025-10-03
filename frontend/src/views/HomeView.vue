@@ -18,6 +18,11 @@
           @auth-change="handleAuthChange"
         />
         
+        <!-- Drive Manager for authenticated users -->
+        <div v-if="isAuthenticated" class="authenticated-content">
+          <DriveManager />
+        </div>
+        
         <div v-if="!isAuthenticated" class="features">
           <div class="feature">
             <h3>🔐 Secure Authentication</h3>
@@ -42,6 +47,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import UserAuth from '../components/UserAuth.vue'
+import DriveManager from '../components/DriveManager.vue'
 import { AuthService } from '../services/authService'
 
 // Authentication state - managed by HomeView
@@ -52,10 +58,9 @@ const isCheckingAuth = ref<boolean>(true)
 const checkAuthStatus = async (): Promise<void> => {
   try {
     isAuthenticated.value = await AuthService.checkAuthStatus()
-  } catch (error) {
-    console.error('Auth check failed:', error)
-    isAuthenticated.value = false
-  } finally {
+    } catch {
+      isAuthenticated.value = false
+    } finally {
     isCheckingAuth.value = false
   }
 }
@@ -118,8 +123,9 @@ onMounted(() => {
 }
 
 .authenticated-content {
-  text-align: center;
+  text-align: left;
   margin-top: 2rem;
+  width: 100%;
 }
 
 .authenticated-content h3 {

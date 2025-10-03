@@ -7,8 +7,16 @@
   ],
   "scripts": {
     "dev:backend": "npm --workspace=backend run dev",
+    "dev:backend:debug": "npm --workspace=backend run dev:debug",
     "dev:frontend": "npm --workspace=frontend run dev",
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
+    "dev": "concurrently --kill-others --prefix-colors \"bgBlue.bold,bgMagenta.bold\" --names \"BACKEND,FRONTEND\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:debug": "concurrently --kill-others --prefix-colors \"bgBlue.bold,bgMagenta.bold\" --names \"BACKEND,FRONTEND\" \"npm run dev:backend:debug\" \"npm run dev:frontend\"",
+    "lint:backend": "npm --workspace=backend run lint",
+    "lint:frontend": "npm --workspace=frontend run lint",
+    "lint": "concurrently --kill-others-on-fail --prefix-colors \"bgRed.bold,bgYellow.bold\" --names \"BACKEND,FRONTEND\" \"npm run lint:backend\" \"npm run lint:frontend\"",
+    "test:backend": "npm --workspace=backend run test",
+    "test:frontend": "npm --workspace=frontend run test",
+    "test": "concurrently --kill-others-on-fail --prefix-colors \"bgGreen.bold,bgCyan.bold\" --names \"BACKEND,FRONTEND\" \"npm run test:backend\" \"npm run test:frontend\""
   },
   "devDependencies": {
     "concurrently": "^8.0.0"
