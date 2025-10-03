@@ -1,3 +1,10 @@
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Load environment variables FIRST
+dotenv.config({ path: path.join(process.cwd(), '.env') });
+dotenv.config({ path: path.join(process.cwd(), '.env.oauth') });
+
 import { Request, Response, NextFunction } from 'express';
 import { google } from 'googleapis';
 import { prisma } from '../lib/prisma.js';

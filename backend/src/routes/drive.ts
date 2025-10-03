@@ -134,7 +134,12 @@ router.delete('/files/:id', async (req: AuthenticatedRequest, res: Response) => 
  */
 router.post('/sync', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const driveUseCases = ServiceFactory.createDriveUseCases(req.session!.accessToken);
+    if (!req.session?.accessToken) {
+      return res.status(401).json({ error: 'Access token not available' });
+    }
+
+    // Always create new instances with current token to ensure fresh authentication
+    const driveUseCases = ServiceFactory.createDriveUseCases(req.session.accessToken);
     const result = await driveUseCases.syncFiles(req.user!.id);
 
     return res.json(result);
@@ -156,7 +161,11 @@ router.post('/files/:id/extract-content', async (req: AuthenticatedRequest, res:
       return res.status(400).json({ error: 'File ID is required' });
     }
 
-    const driveUseCases = ServiceFactory.createDriveUseCases(req.session!.accessToken);
+    if (!req.session?.accessToken) {
+      return res.status(401).json({ error: 'Access token not available' });
+    }
+
+    const driveUseCases = ServiceFactory.createDriveUseCases(req.session.accessToken);
     const result = await driveUseCases.extractFileContent(id, req.user!.id);
 
     return res.json(result);
@@ -175,7 +184,11 @@ router.post('/extract-all-content', async (req: AuthenticatedRequest, res: Respo
   try {
     const { batchSize = 5 } = req.body;
 
-    const driveUseCases = ServiceFactory.createDriveUseCases(req.session!.accessToken);
+    if (!req.session?.accessToken) {
+      return res.status(401).json({ error: 'Access token not available' });
+    }
+
+    const driveUseCases = ServiceFactory.createDriveUseCases(req.session.accessToken);
     const result = await driveUseCases.extractAllContent(req.user!.id, batchSize);
 
     return res.json(result);
