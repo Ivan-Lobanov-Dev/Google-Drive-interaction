@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { Request, Response, NextFunction } from 'express'
-import { google } from 'googleapis'
+import { Response, NextFunction } from 'express'
 import { prisma } from '../../lib/prisma.js'
 import { authenticate } from '../auth.js'
 import type { AuthenticatedRequest } from '../auth.js'
+import type { UserSessionWithUser } from '../../types/test.js'
 
 // Mock googleapis
 vi.mock('googleapis', () => ({
@@ -85,7 +85,7 @@ describe('Auth Middleware', () => {
 
       mockRequest.cookies = { sessionId: 'session-token-123' }
 
-      vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as any)
+      vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as UserSessionWithUser)
 
       await authenticate(mockRequest as AuthenticatedRequest, mockResponse as Response, mockNext)
 
@@ -139,7 +139,7 @@ describe('Auth Middleware', () => {
       }
 
       mockRequest.cookies = { sessionId: 'session-token-123' }
-      vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as any)
+      vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as UserSessionWithUser)
 
       await authenticate(mockRequest as AuthenticatedRequest, mockResponse as Response, mockNext)
 
@@ -168,7 +168,7 @@ describe('Auth Middleware', () => {
       }
 
       mockRequest.cookies = { sessionId: 'session-token-123' }
-      vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as any)
+      vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as UserSessionWithUser)
 
       await authenticate(mockRequest as AuthenticatedRequest, mockResponse as Response, mockNext)
 

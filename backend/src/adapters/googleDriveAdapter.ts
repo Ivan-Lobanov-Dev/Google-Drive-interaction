@@ -212,7 +212,8 @@ export class GoogleDriveAdapter implements CloudStorageService {
     for (const file of files) {
       try {
         // Check if file is trashed (deleted in Google Drive)
-        if ((file.extraMetadata as any)?.trashed === true) {
+        const extraMetadata = file.extraMetadata as Record<string, unknown> | undefined;
+        if (extraMetadata?.trashed === true) {
           // Delete file from our database
           const existingFile = await prisma.filesMetadata.findFirst({
             where: {

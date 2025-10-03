@@ -154,4 +154,4 @@ router.post('/logout', authenticate, async (req: AuthenticatedRequest, res: Resp
   }
 });
 
-export default router;
+export { router as authRouter };

@@ -3,7 +3,7 @@ import type { User, AuthResponse } from '../types/auth'
 
 export class AuthService {
   /**
-   * Базовый метод для работы с аутентификацией
+   * Base method for working with authentication
    */
   private static async makeAuthRequest(): Promise<Response> {
     return fetch(buildApiUrl(AUTH_ENDPOINTS.ME), {
@@ -12,7 +12,7 @@ export class AuthService {
   }
 
   /**
-   * Получить данные текущего пользователя
+   * Get current user data
    */
   static async getUserData(): Promise<User | null> {
     try {
@@ -24,27 +24,25 @@ export class AuthService {
       }
       
       return null
-    } catch (error) {
-      console.error('Failed to get user data:', error)
+    } catch {
       return null
     }
   }
 
   /**
-   * Проверить, аутентифицирован ли пользователь (без получения данных)
+   * Check if user is authenticated (without getting data)
    */
   static async checkAuthStatus(): Promise<boolean> {
     try {
       const response = await this.makeAuthRequest()
       return response.ok
-    } catch (error) {
-      console.error('Auth check failed:', error)
+    } catch {
       return false
     }
   }
 
   /**
-   * Инициировать процесс входа через Google OAuth
+   * Initiate login process via Google OAuth
    */
   static async initiateLogin(): Promise<string | null> {
     try {
@@ -57,13 +55,12 @@ export class AuthService {
       
       throw new Error('Failed to get auth URL')
     } catch (error) {
-      console.error('Login failed:', error)
       throw error
     }
   }
 
   /**
-   * Выполнить перенаправление на страницу входа Google
+   * Redirect to Google login page
    */
   static async login(): Promise<void> {
     const authUrl = await this.initiateLogin()
@@ -73,7 +70,7 @@ export class AuthService {
   }
 
   /**
-   * Выйти из системы
+   * Logout from system
    */
   static async logout(): Promise<boolean> {
     try {
@@ -83,14 +80,13 @@ export class AuthService {
       })
       
       return response.ok
-    } catch (error) {
-      console.error('Logout failed:', error)
+    } catch {
       return false
     }
   }
 
   /**
-   * Проверить, является ли текущий URL OAuth callback'ом
+   * Check if current URL is OAuth callback
    */
   static isOAuthCallback(): boolean {
     const urlParams = new URLSearchParams(window.location.search)
@@ -98,7 +94,7 @@ export class AuthService {
   }
 
   /**
-   * Очистить URL от OAuth параметров
+   * Clean URL from OAuth parameters
    */
   static cleanupOAuthUrl(): void {
     window.history.replaceState({}, document.title, window.location.pathname)

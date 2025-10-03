@@ -55,7 +55,7 @@ export const authenticate = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
-) => {
+): Promise<Response | void> => {
   try {
     const sessionId = req.cookies.sessionId;
 
