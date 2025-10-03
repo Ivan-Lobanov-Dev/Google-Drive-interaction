@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { Request, Response, NextFunction } from 'express'
-import { google } from 'googleapis'
+import { Response, NextFunction } from 'express'
 import { prisma } from '../../lib/prisma.js'
 import { authenticate } from '../auth.js'
 import type { AuthenticatedRequest } from '../auth.js'
+import type { UserSessionWithUser } from '../../types/test.js'
 
 // Mock googleapis
 vi.mock('googleapis', () => ({
@@ -12,6 +12,7 @@ vi.mock('googleapis', () => ({
       OAuth2: vi.fn().mockImplementation(() => ({
         setCredentials: vi.fn(),
         getAccessToken: vi.fn(),
+        refreshAccessToken: vi.fn()
       }))
     }
   }
@@ -27,6 +28,7 @@ vi.mock('../../lib/prisma.js', () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
   }
 }))
@@ -85,7 +87,7 @@ describe('Auth Middleware', () => {
 
       mockRequest.cookies = { sessionId: 'session-token-123' }
 
-      vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as any)
+      vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as UserSessionWithUser)
 
       await authenticate(mockRequest as AuthenticatedRequest, mockResponse as Response, mockNext)
 
@@ -139,7 +141,7 @@ describe('Auth Middleware', () => {
       }
 
       mockRequest.cookies = { sessionId: 'session-token-123' }
-      vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as any)
+      vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as UserSessionWithUser)
 
       await authenticate(mockRequest as AuthenticatedRequest, mockResponse as Response, mockNext)
 
@@ -168,12 +170,58 @@ describe('Auth Middleware', () => {
       }
 
       mockRequest.cookies = { sessionId: 'session-token-123' }
-      vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as any)
+      vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as UserSessionWithUser)
 
       await authenticate(mockRequest as AuthenticatedRequest, mockResponse as Response, mockNext)
 
       expect(mockRequest.user).toEqual(mockUser)
       expect(mockNext).toHaveBeenCalled()
+    })
+
+
+    it('should handle refresh token failure and delete session', async () => {
+      const mockUser = {
+        id: 'user-123',
+        email: 'test@example.com',
+        name: 'Test User',
+        pictureUrl: null
+      }
+
+      const mockSession = {
+        id: 'session-123',
+        sessionId: 'session-token-123',
+        accessToken: 'expired-access-token',
+        refreshToken: 'invalid-refresh-token',
+        tokenExpiresAt: new Date(Date.now() - 1000), // Expired
+        user: mockUser
+      }
+
+      // Mock Google OAuth refresh failure
+      const { google } = await import('googleapis')
+      const mockRefreshAccessToken = vi.fn().mockRejectedValue(new Error('Invalid refresh token'))
+      
+      vi.mocked(google.auth.OAuth2).mockImplementation(() => ({
+        setCredentials: vi.fn(),
+        refreshAccessToken: mockRefreshAccessToken
+      }) as any)
+
+      mockRequest.cookies = { sessionId: 'session-token-123' }
+      vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as UserSessionWithUser)
+      vi.mocked(prisma.userSession.deleteMany).mockResolvedValue({ count: 1 })
+
+      await authenticate(mockRequest as AuthenticatedRequest, mockResponse as Response, mockNext)
+
+      // Verify session was deleted
+      expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({
+        where: { sessionId: 'session-token-123' }
+      })
+
+      // Verify 401 response
+      expect(mockResponse.status).toHaveBeenCalledWith(401)
+      expect(mockResponse.json).toHaveBeenCalledWith({ 
+        error: 'Session expired and refresh failed' 
+      })
+      expect(mockNext).not.toHaveBeenCalled()
     })
 
     it('should handle database errors gracefully', async () => {

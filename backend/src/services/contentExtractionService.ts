@@ -62,12 +62,14 @@ console.log('✓ pdfjs-dist loaded successfully');
 
 export class ContentExtractionService {
   private drive: drive_v3.Drive;
+  private auth: InstanceType<typeof google.auth.OAuth2>;
 
   constructor(accessToken: string) {
-    const auth = new google.auth.OAuth2();
-    auth.setCredentials({ access_token: accessToken });
-    this.drive = google.drive({ version: 'v3', auth });
+    this.auth = new google.auth.OAuth2();
+    this.auth.setCredentials({ access_token: accessToken });
+    this.drive = google.drive({ version: 'v3', auth: this.auth });
   }
+
 
   /**
    * Extract text content from Google Drive file

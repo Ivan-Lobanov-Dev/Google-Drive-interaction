@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
+// @ts-expect-error: UserAuth.vue might not have type declarations in test context
 import UserAuth from '../UserAuth.vue'
 import { AuthService } from '../../services/authService'
 import type { User } from '../../types/auth'
 
-// Mock AuthService
 vi.mock('../../services/authService', () => ({
   AuthService: {
     getUserData: vi.fn(),
@@ -62,7 +62,7 @@ describe('UserAuth', () => {
     })
 
     it('should call AuthService.login when login button is clicked', async () => {
-      const mockLogin = vi.mocked(AuthService.login).mockResolvedValue(undefined)
+      vi.mocked(AuthService.login).mockResolvedValue(undefined)
       
       const wrapper = mount(UserAuth, {
         props: {
@@ -72,7 +72,7 @@ describe('UserAuth', () => {
 
       await wrapper.find('.login-btn').trigger('click')
 
-      expect(mockLogin).toHaveBeenCalledOnce()
+      expect(AuthService.login).toHaveBeenCalledTimes(1)
     })
 
     it('should show loading state when login is in progress', async () => {
@@ -120,7 +120,7 @@ describe('UserAuth', () => {
     })
 
     it('should render user info when data is loaded', async () => {
-      const mockGetUserData = vi.mocked(AuthService.getUserData).mockResolvedValue(mockUser)
+      vi.mocked(AuthService.getUserData).mockResolvedValue(mockUser)
       
       const wrapper = mount(UserAuth, {
         props: {
@@ -132,7 +132,7 @@ describe('UserAuth', () => {
       await wrapper.vm.$nextTick()
       await new Promise(resolve => setTimeout(resolve, 0)) // Wait for async operations
 
-      expect(mockGetUserData).toHaveBeenCalledOnce()
+      expect(AuthService.getUserData).toHaveBeenCalledTimes(1)
       expect(wrapper.find('.user-loading').exists()).toBe(false)
       expect(wrapper.find('.user-info').exists()).toBe(true)
       expect(wrapper.find('.user-avatar').attributes('src')).toBe(mockUser.pictureUrl)
@@ -142,7 +142,7 @@ describe('UserAuth', () => {
 
     it('should show user avatar placeholder when no picture URL', async () => {
       const userWithoutPicture = { ...mockUser, pictureUrl: null }
-      const mockGetUserData = vi.mocked(AuthService.getUserData).mockResolvedValue(userWithoutPicture)
+      vi.mocked(AuthService.getUserData).mockResolvedValue(userWithoutPicture)
       
       const wrapper = mount(UserAuth, {
         props: {
@@ -160,7 +160,7 @@ describe('UserAuth', () => {
     })
 
     it('should show avatar placeholder when image fails to load', async () => {
-      const mockGetUserData = vi.mocked(AuthService.getUserData).mockResolvedValue(mockUser)
+      vi.mocked(AuthService.getUserData).mockResolvedValue(mockUser)
       
       const wrapper = mount(UserAuth, {
         props: {
@@ -180,8 +180,8 @@ describe('UserAuth', () => {
     })
 
     it('should call logout when logout button is clicked', async () => {
-      const mockGetUserData = vi.mocked(AuthService.getUserData).mockResolvedValue(mockUser)
-      const mockLogout = vi.mocked(AuthService.logout).mockResolvedValue(true)
+      vi.mocked(AuthService.getUserData).mockResolvedValue(mockUser)
+      vi.mocked(AuthService.logout).mockResolvedValue(true)
       
       const wrapper = mount(UserAuth, {
         props: {
@@ -195,12 +195,12 @@ describe('UserAuth', () => {
 
       await wrapper.find('.logout-btn').trigger('click')
 
-      expect(mockLogout).toHaveBeenCalledOnce()
+      expect(AuthService.logout).toHaveBeenCalledTimes(1)
     })
 
     it('should emit auth-change event when logout is successful', async () => {
-      const mockGetUserData = vi.mocked(AuthService.getUserData).mockResolvedValue(mockUser)
-      const mockLogout = vi.mocked(AuthService.logout).mockResolvedValue(true)
+      vi.mocked(AuthService.getUserData).mockResolvedValue(mockUser)
+      vi.mocked(AuthService.logout).mockResolvedValue(true)
       
       const wrapper = mount(UserAuth, {
         props: {
@@ -219,7 +219,7 @@ describe('UserAuth', () => {
     })
 
     it('should show loading state during logout', async () => {
-      const mockGetUserData = vi.mocked(AuthService.getUserData).mockResolvedValue(mockUser)
+      vi.mocked(AuthService.getUserData).mockResolvedValue(mockUser)
       const mockLogout = vi.mocked(AuthService.logout).mockImplementation(
         () => new Promise(resolve => setTimeout(() => resolve(true), 100))
       )
@@ -332,7 +332,7 @@ describe('UserAuth', () => {
 
   describe('error handling', () => {
     it('should handle login errors gracefully', async () => {
-      const mockLogin = vi.mocked(AuthService.login).mockRejectedValue(new Error('Login failed'))
+      vi.mocked(AuthService.login).mockRejectedValue(new Error('Login failed'))
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       
       const wrapper = mount(UserAuth, {
@@ -355,8 +355,8 @@ describe('UserAuth', () => {
         name: 'Test User',
         pictureUrl: null
       }
-      const mockGetUserData = vi.mocked(AuthService.getUserData).mockResolvedValue(mockUser)
-      const mockLogout = vi.mocked(AuthService.logout).mockRejectedValue(new Error('Logout failed'))
+      vi.mocked(AuthService.getUserData).mockResolvedValue(mockUser)
+      vi.mocked(AuthService.logout).mockRejectedValue(new Error('Logout failed'))
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       
       const wrapper = mount(UserAuth, {

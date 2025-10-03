@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { Request, Response } from 'express'
 import { google } from 'googleapis'
-import { v4 as uuidv4 } from 'uuid'
 import { prisma } from '../../lib/prisma.js'
-import { authenticate, AuthenticatedRequest } from '../../middleware/auth.js'
+import { AuthenticatedRequest } from '../../middleware/auth.js'
+import type { OAuth2Client } from 'google-auth-library'
+import type { UserSession } from '@prisma/client'
+import type { MockOAuth2Client, MockUser, MockUserSession } from '../../types/test.js'
 
 // Mock googleapis
 vi.mock('googleapis', () => ({
@@ -60,7 +62,7 @@ process.env.JWT_SECRET = 'test-jwt-secret'
 
 describe('Auth Routes', () => {
   let mockRequest: Partial<Request>
-  let mockResponse: Partial<Response>
+
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -71,12 +73,6 @@ describe('Auth Routes', () => {
       headers: {},
     }
     
-    mockResponse = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn().mockReturnThis(),
-      redirect: vi.fn().mockReturnThis(),
-      cookie: vi.fn().mockReturnThis(),
-    }
   })
 
   afterEach(() => {
@@ -87,13 +83,15 @@ describe('Auth Routes', () => {
     it('should generate Google OAuth URL', async () => {
       const mockAuthUrl = 'https://accounts.google.com/oauth/authorize?client_id=test&redirect_uri=http://localhost:3000/callback&scope=drive&response_type=code&state=mocked-uuid'
       
-      const mockOAuth2Client = {
-        generateAuthUrl: vi.fn().mockReturnValue(mockAuthUrl)
+      const mockOAuth2Client: MockOAuth2Client = {
+        generateAuthUrl: vi.fn().mockReturnValue(mockAuthUrl),
+        getToken: vi.fn(),
+        setCredentials: vi.fn()
       }
-      vi.mocked(google.auth.OAuth2).mockReturnValue(mockOAuth2Client as any)
+      vi.mocked(google.auth.OAuth2).mockReturnValue(mockOAuth2Client as unknown as OAuth2Client)
 
       // Test OAuth2Client creation and URL generation
-      const oauth2Client = new (google.auth.OAuth2 as any)()
+      const oauth2Client = new (google.auth.OAuth2 as unknown as typeof OAuth2Client)()
       const authUrl = oauth2Client.generateAuthUrl({
         access_type: 'offline',
         scope: ['https://www.googleapis.com/auth/drive'],
@@ -111,7 +109,7 @@ describe('Auth Routes', () => {
 
       // The error should be caught and handled gracefully
       expect(() => {
-        new (google.auth.OAuth2 as any)()
+        new (google.auth.OAuth2 as unknown as typeof OAuth2Client)()
       }).toThrow('Invalid OAuth configuration')
     })
   })
@@ -131,27 +129,29 @@ describe('Auth Routes', () => {
         picture: 'https://example.com/avatar.jpg'
       }
 
-      const mockOAuth2Client = {
+      const mockOAuth2Client: MockOAuth2Client = {
         getToken: vi.fn().mockResolvedValue({
           tokens: mockTokens
         }),
-        setCredentials: vi.fn()
+        setCredentials: vi.fn(),
+        generateAuthUrl: vi.fn()
       }
 
-      vi.mocked(google.auth.OAuth2).mockReturnValue(mockOAuth2Client as any)
+      vi.mocked(google.auth.OAuth2).mockReturnValue(mockOAuth2Client as unknown as OAuth2Client)
 
       // Mock successful user creation
-      vi.mocked(prisma.user.upsert).mockResolvedValue({
+      const mockUser: MockUser = {
         id: 'user-123',
+        googleUserId: mockUserInfo.id,
         email: mockUserInfo.email,
         name: mockUserInfo.name,
         pictureUrl: mockUserInfo.picture,
-        googleId: mockUserInfo.id,
         createdAt: new Date(),
         updatedAt: new Date()
-      } as any)
+      }
+      vi.mocked(prisma.user.upsert).mockResolvedValue(mockUser)
 
-      vi.mocked(prisma.userSession.create).mockResolvedValue({
+      const mockSession: MockUserSession = {
         id: 'session-123',
         sessionId: 'session-uuid',
         userId: 'user-123',
@@ -160,25 +160,26 @@ describe('Auth Routes', () => {
         tokenExpiresAt: new Date(mockTokens.expiry_date),
         createdAt: new Date(),
         updatedAt: new Date()
-      } as any)
+      }
+      vi.mocked(prisma.userSession.create).mockResolvedValue(mockSession)
 
       mockRequest.query = {
         code: 'auth-code-123',
         state: 'mocked-uuid'
       }
 
-      // Test would require actual route handler execution
       // This is a structural test to ensure the route exists
       expect(true).toBe(true) // Placeholder for actual route testing
     })
 
     it('should handle OAuth callback errors', async () => {
-      const mockOAuth2Client = {
+      const mockOAuth2Client: MockOAuth2Client = {
         getToken: vi.fn().mockRejectedValue(new Error('Invalid authorization code')),
-        setCredentials: vi.fn()
+        setCredentials: vi.fn(),
+        generateAuthUrl: vi.fn()
       }
 
-      vi.mocked(google.auth.OAuth2).mockReturnValue(mockOAuth2Client as any)
+      vi.mocked(google.auth.OAuth2).mockReturnValue(mockOAuth2Client as unknown as OAuth2Client)
 
       mockRequest.query = {
         code: 'invalid-code',
@@ -241,7 +242,7 @@ describe('Auth Routes', () => {
         cookies: { sessionId: 'session-uuid' }
       } as unknown as AuthenticatedRequest
 
-      vi.mocked(prisma.userSession.delete).mockResolvedValue(mockSession as any)
+      vi.mocked(prisma.userSession.delete).mockResolvedValue(mockSession as UserSession)
 
       // Test would require actual route handler execution
       expect(true).toBe(true) // Placeholder for actual route testing
@@ -266,12 +267,13 @@ describe('Auth Routes', () => {
         googleUserId: 'google-user-123'
       }
 
-      vi.mocked(prisma.user.upsert).mockResolvedValue({
+      const mockUser: MockUser = {
         id: 'user-123',
         ...mockUserData,
         createdAt: new Date(),
         updatedAt: new Date()
-      } as any)
+      }
+      vi.mocked(prisma.user.upsert).mockResolvedValue(mockUser)
 
       const result = await prisma.user.upsert({
         where: { googleUserId: mockUserData.googleUserId },
@@ -296,12 +298,13 @@ describe('Auth Routes', () => {
         tokenExpiresAt: new Date(Date.now() + 3600000)
       }
 
-      vi.mocked(prisma.userSession.create).mockResolvedValue({
+      const mockSession: MockUserSession = {
         id: 'session-123',
         ...mockSessionData,
         createdAt: new Date(),
         updatedAt: new Date()
-      } as any)
+      }
+      vi.mocked(prisma.userSession.create).mockResolvedValue(mockSession)
 
       const result = await prisma.userSession.create({
         data: mockSessionData
@@ -344,7 +347,7 @@ describe('Auth Routes', () => {
 
       // OAuth2Client should handle missing env vars
       expect(() => {
-        new (google.auth.OAuth2 as any)()
+        new (google.auth.OAuth2 as unknown as typeof OAuth2Client)()
       }).not.toThrow()
 
       // Restore env var

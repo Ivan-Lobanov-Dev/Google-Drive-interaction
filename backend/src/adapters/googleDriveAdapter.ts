@@ -24,15 +24,17 @@ export class GoogleDriveAdapter implements CloudStorageService {
   private drive: drive_v3.Drive;
   private accessToken: string;
   private contentService: ContentExtractionService;
+  private auth: InstanceType<typeof google.auth.OAuth2>;
 
   constructor(accessToken: string, contentService?: ContentExtractionService) {
     this.accessToken = accessToken;
     this.contentService = contentService || new ContentExtractionService(accessToken);
     
-    const auth = new google.auth.OAuth2();
-    auth.setCredentials({ access_token: accessToken });
-    this.drive = google.drive({ version: 'v3', auth });
+    this.auth = new google.auth.OAuth2();
+    this.auth.setCredentials({ access_token: accessToken });
+    this.drive = google.drive({ version: 'v3', auth: this.auth });
   }
+
 
   /**
    * Convert Google Drive file to universal CloudFile format
@@ -212,7 +214,8 @@ export class GoogleDriveAdapter implements CloudStorageService {
     for (const file of files) {
       try {
         // Check if file is trashed (deleted in Google Drive)
-        if ((file.extraMetadata as any)?.trashed === true) {
+        const extraMetadata = file.extraMetadata as Record<string, unknown> | undefined;
+        if (extraMetadata?.trashed === true) {
           // Delete file from our database
           const existingFile = await prisma.filesMetadata.findFirst({
             where: {
