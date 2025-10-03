@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "dev:debug": "tsx watch --inspect src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc",
     "type-check": "tsc --noEmit",
@@ -12,7 +13,10 @@
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:db:setup": "cd .. && docker compose up -d postgres-test && sleep 5 && cd backend && DATABASE_URL=postgresql://postgres:postgres@localhost:5434/gdi_test_db npx prisma migrate deploy",
+    "test:db:reset": "DATABASE_URL=postgresql://postgres:postgres@localhost:5434/gdi_test_db npx prisma migrate reset --force",
+    "test:db:stop": "cd .. && docker compose stop postgres-test"
   },
   "keywords": [],
   "author": "",
@@ -44,7 +48,11 @@
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "googleapis": "^128.0.0",
+    "langchain": "^0.3.35",
+    "mammoth": "^1.11.0",
+    "pdfjs-dist": "^5.4.149",
     "pg": "^8.11.3",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "xlsx": "^0.18.5"
   }
 }

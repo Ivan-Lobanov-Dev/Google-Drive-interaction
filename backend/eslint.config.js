@@ -7,12 +7,13 @@ export default [
   js.configs.recommended,
   {
     files: ['**/*.ts', '**/*.tsx'],
+    ignores: ['vitest.config.ts'],
     languageOptions: {
       parser: tsparser,
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module',
-        project: './tsconfig.json',
+        project: ['./tsconfig.json', './vitest.config.ts'],
       },
       globals: {
         process: 'readonly',
@@ -28,20 +29,25 @@ export default [
       'import': importPlugin,
     },
     rules: {
-      // Запрет дефолтных экспортов
+      // Prohibit default exports
       'import/no-default-export': 'error',
       
-      // Дополнительные правила для именованных экспортов
+      // Additional rules for named exports
       'import/prefer-default-export': 'off',
       'import/no-named-as-default': 'off',
       
-      // Другие полезные правила TypeScript
-      '@typescript-eslint/no-unused-vars': 'error',
+      // Other useful TypeScript rules
+      '@typescript-eslint/no-unused-vars': ['error', { 
+        'argsIgnorePattern': '^_',
+        'varsIgnorePattern': '^_',
+        'ignoreRestSiblings': true
+      }],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/explicit-function-return-type': 'warn',
       
-      // Отключение no-undef для TypeScript файлов
+      // Disable no-undef for TypeScript files
       'no-undef': 'off',
+      'no-unused-vars': 'off', // Use @typescript-eslint/no-unused-vars instead
     },
   },
 ];

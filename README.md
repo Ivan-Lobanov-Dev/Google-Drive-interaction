@@ -1,5 +1,66 @@
-# Google-Drive-interaction
-Allows you to perform CRUD methods on files in Google Drive and obtain statistical data about files using  AI Question Interface
+# Google Drive Integration
+
+Allows you to perform CRUD methods on files in Google Drive and obtain statistical data about files 
+using  AI Question Interface
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 18+ and npm
+- Docker and Docker Compose
+- Google Cloud Console project with Drive API enabled
+
+### Installation
+
+1. **Clone the repository**
+   ```
+   git clone <repository-url>
+   cd Google-Drive-interaction
+   ```
+
+2. **Install dependencies**
+   ```npm install```
+
+3. **Setup environment variables**
+   ```
+   # Backend environment
+   cp backend/.env.example backend/.env
+   # Add your Google OAuth credentials and other settings
+   ```
+
+4. **Start the databases**
+   ```docker compose up -d```
+
+5. **Run database migrations**
+   ```cd backend && npx prisma migrate deploy```
+
+6. **Start the application**
+   ```npm run dev```
+
+The application will be available at:
+- Frontend: http://localhost:5173
+- Backend: http://localhost:4000
+
+## 🧪 Testing
+
+The project includes comprehensive testing with isolated test environment:
+
+```bash
+# Setup test database (run once)
+cd backend && npm run test:db:setup
+
+# Run all tests
+npm test
+
+# Run tests once
+npm run test:run
+
+# Run with coverage
+npm run test:coverage
+```
+
+See [TESTING.md](backend/TESTING.md) for detailed testing documentation.
 
 # 1. Architecture Document:
 
@@ -10,22 +71,23 @@ Google Drive → Extractor → Chunker → Embedder → Vector Store → Retriev
   - **When:** Runs when syncing Google Drive files or fetching updated content.  
   - **Actions:** Sends API requests to Google Drive to fetch file metadata and content (Docs, Sheets, PDFs, text files).  
   - **Where Data is Stored:**  
-    - **Files table (`files`)** – stores metadata such as `id`, `name`, `owner`, `mimeType`, `size`, `modifiedTime`, `permissions`, and sets `content_fetched = false` initially. All other metadata we need could be store in `extra_metadata` as JSON
-    - **Note:** Metadata from all users can be safely aggregated for analytics queries (e.g., “Who owns the most files?”) without exposing file content.
+    - **Files table (`files_metadata`)** – stores metadata such as `id`, `user_id`, `name`, `owner`, `mime_type`, `size`, `modified_time`, `created_time`, `permissions`, and sets `content_fetched = false` initially. Additional metadata stored in flexible `extra_metadata` JSON field (webViewLink, thumbnailLink, description, starred, trashed, shared, ownedByMe, owners, parents, etc.)
+    - **Note:** Each user's files are isolated by `user_id`. Metadata can be aggregated for analytics while respecting user boundaries.
 
 - **Chunker**  
   - **When:** Immediately after file content is retrieved by the Extractor.  
-  - **Actions:** Splits the file text into logical chunks (500–1000 tokens with ~50-token overlap).  
+  - **Actions:** Splits the file text into logical chunks (800 characters with 50-character overlap). Uses intelligent break point detection for sentences, paragraphs, and word boundaries to maintain context.  
   - **Where Data is Stored:**  
     - **Chunks table (`file_chunks`)** – stores `id`, `file_id` (FK), `text`, `chunk_index`, and `created_at`.  
     - `embedding` is initially empty and will be populated by the Embedder.
-    - **Note:** Only chunks that the user has access to (based on `owner` and `permissions`) will be retrieved for AI queries.
+    - **Note:** Access control is enforced through the parent file's `user_id` - only chunks from files belonging to the requesting user are retrieved for AI queries.
+    - **Improvements:** Enhanced chunking algorithm prevents duplicate chunks and ensures optimal text segmentation.
 
 - **Embedder**  
   - **When:** After chunks are created.  
   - **Actions:** Generates vector embeddings for each chunk using the OpenAI embeddings API.  
   - **Where Data is Stored:**  
-    - Updates **Chunks table (`file_chunks`)** by filling the `embedding` field.
+    - Updates **Chunks table (`file_chunks`)** by filling the `embedding` field (currently stored as string, can be migrated to vector type later).
 
 - **Vector Store**  
   - **When:** Immediately after embeddings are generated.  
@@ -35,19 +97,19 @@ Google Drive → Extractor → Chunker → Embedder → Vector Store → Retriev
 
 - **Retriever**  
   - **When:** When a user makes a query via the front-end AI interface.  
-  - **Actions:** Performs semantic search on the vector store, filtering chunks by `userId` or `owner` according to ACLs for personal requests.  
+  - **Actions:** Performs semantic search on the vector store, filtering chunks by `user_id` according to ACLs for personal requests.  
   - **Where Data is Accessed:**  
-    - Reads from **Chunks table (`file_chunks`)** and **Files table (`files`)** for metadata and ACL validation.
-    - **Note:** For global analytics questions that only require metadata (e.g., “Who owns the most files?”), filtering by `owner` is not applied, allowing all users to see aggregate statistics from `files` safely without exposing content.
+    - Reads from **Chunks table (`file_chunks`)** and **Files table (`files_metadata`)** for metadata and ACL validation.
+    - **Note:** Access control is enforced by joining chunks with files_metadata and filtering by `user_id`. For analytics questions, metadata can be aggregated while respecting user boundaries.
 
 - **RAG Orchestrator**  
   - **When:** After Retriever fetches relevant chunks **for content-based queries only**.  
   - **Actions:**  
-    - For questions requiring file content (e.g., “Summarize Project Plan.pdf”), it combines only the **chunks the user has access to** into a context block and sends it to the LLM for answer generation.  
-    - For questions based purely on metadata (e.g., “Who owns the most files?”, “Which file is the largest?”), the RAG step is **skipped**. Aggregated metadata from `files_metadata` is used directly to generate the answer.  
+    - For questions requiring file content (e.g., "Summarize Project Plan.pdf"), it combines only the **chunks the user has access to** (filtered by `user_id`) into a context block and sends it to the LLM for answer generation.  
+    - For questions based purely on metadata (e.g., "Which of my files is the largest?", "When did I last modify files?"), the RAG step is **skipped**. User-specific metadata from `files_metadata` is used directly to generate the answer.  
   - **Where Data is Accessed:**  
-    - **Content queries:** filtered chunks from `files_chunks` (respecting ACLs and owner).  
-    - **Metadata queries:** aggregated data from `files_metadata` (safe for all users; does not expose file text).  
+    - **Content queries:** filtered chunks from `file_chunks` joined with `files_metadata` (respecting `user_id` ACLs).  
+    - **Metadata queries:** user-specific data from `files_metadata` (filtered by `user_id`; does not expose file content).  
 
 
 - **Answering & Audit Logging**  
@@ -116,27 +178,34 @@ Table name: files_metadata
 | Column           | Type        | Description                        |
 | ---------------- | ----------- | ---------------------------------- |
 | id               | string (PK) | Google Drive File ID               |
+| user_id          | UUID (FK)   | Reference to users.id              |
 | name             | string      | File name                          |
 | owner            | string      | Owner email                        |
-| mimeType         | string      | File type (Google Docs, PDF, etc.) |
-| size             | int         | File size in bytes                 |
-| modifiedTime     | timestamp   | Last modification time             |
+| mime_type        | string      | File type (Google Docs, PDF, etc.) |
+| size             | bigint      | File size in bytes                 |
+| modified_time    | timestamp   | Last modification time             |
+| created_time     | timestamp   | File creation time                 |
 | permissions      | JSON        | ACL info                           |
-| content\_fetched | boolean     | Flag if content has been ingested  |
-| extra_metadata   | JSON        | Any other relevant data (flexible) |
+| content_fetched  | boolean     | Flag if content has been ingested  |
+| extra_metadata   | JSON        | Flexible field for future extensions (webViewLink, thumbnailLink, description, starred, trashed, shared, ownedByMe, owners, parents, etc.) |
+| created_at       | timestamp   | Record creation time               |
+| updated_at       | timestamp   | Record last update time            |
 
-- **Note:** Index `owner`, `modifiedTime`, and `size` for fast aggregation queries used by AI analytics.
+- **Note:** 
+  - Unique constraint on `(id, user_id)` - same file can belong to different users
+  - Index `user_id`, `owner`, `modified_time`, and `size` for fast queries
+  - `extra_metadata` JSON field allows easy addition of new fields without schema changes
 
-Table name: files_chunks
+Table name: file_chunks
 
 | Column       | Type        | Description             |
 | ------------ | ----------- | ----------------------- |
 | id           | UUID (PK)   | Chunk ID                |
-| file\_id     | string (FK) | Parent file ID          |
+| file_id      | string (FK) | Parent file ID          |
 | text         | text        | Chunk text              |
-| embedding    | vector      | Vector embedding        |
-| chunk\_index | int         | Chunk order within file |
-| created\_at  | timestamp   | Creation time           |
+| embedding    | string      | Vector embedding (can be changed to vector type later) |
+| chunk_index  | int         | Chunk order within file |
+| created_at   | timestamp   | Creation time           |
 
 Table name: users_request
 
@@ -217,6 +286,125 @@ Logs out current user and invalidates session.
   "message": "Logged out successfully"
 }
 ```
+
+## Google Drive API Endpoints
+
+### **GET** /api/drive/files
+
+Get files from database with pagination and filtering.
+
+- **Authentication:** Required (session cookie)
+- **Query Parameters:**
+  - `page` (number, optional): Page number (default: 1)
+  - `limit` (number, optional): Items per page (default: 20)
+  - `modifiedAfter` (string, optional): ISO date string
+  - `modifiedBefore` (string, optional): ISO date string
+  - `mimeType` (string, optional): Filter by MIME type
+  - `search` (string, optional): Search in file names
+
+- **Response:**
+```json
+{
+  "files": [
+    {
+      "id": "file-id",
+      "userId": "user-uuid",
+      "name": "Document.pdf",
+      "owner": "user@example.com",
+      "mimeType": "application/pdf",
+      "size": "1024000",
+      "modifiedTime": "2025-01-15T10:30:00Z",
+      "createdTime": "2025-01-10T09:00:00Z",
+      "permissions": {...},
+      "contentFetched": false,
+      "extraMetadata": {
+        "webViewLink": "https://drive.google.com/file/d/.../view",
+        "thumbnailLink": "https://...",
+        "starred": false,
+        "shared": true
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "totalCount": 150,
+    "totalPages": 8,
+    "hasNext": true,
+    "hasPrev": false
+  }
+}
+```
+
+### **GET** /api/drive/files/:id
+
+Get specific file by ID.
+
+- **Authentication:** Required (session cookie)
+- **Response:** Single file object (same structure as in files array above)
+
+### **PUT** /api/drive/files/:id
+
+Update file metadata in Google Drive and database.
+
+- **Authentication:** Required (session cookie)
+- **Request Body:**
+```json
+{
+  "name": "New File Name.pdf",
+  "description": "Updated description"
+}
+```
+- **Response:**
+```json
+{
+  "message": "File updated successfully",
+  "file": { /* updated file object */ }
+}
+```
+
+### **DELETE** /api/drive/files/:id
+
+Delete file from Google Drive and database.
+
+- **Authentication:** Required (session cookie)
+- **Response:**
+```json
+{
+  "message": "File deleted successfully"
+}
+```
+
+### **POST** /api/drive/sync
+
+Smart synchronization with Google Drive - fetches only modified files since last sync.
+
+- **Authentication:** Required (session cookie)
+- **Request Body:**
+```json
+{
+  "modifiedAfter": "2025-01-01T00:00:00Z"
+}
+```
+- **Response:**
+```json
+{
+  "message": "Files synchronized successfully",
+  "stats": {
+    "totalFetched": 25,
+    "totalSaved": 15,
+    "totalSkipped": 10,
+    "contentExtracted": 12,
+    "contentFailed": 3
+  }
+}
+```
+
+**Features:**
+- Automatically determines last sync time if `modifiedAfter` not provided
+- Includes content extraction statistics
+- Handles large file sets with pagination
+- Robust error handling for content extraction failures
 
 ## RAG Endpoints
 

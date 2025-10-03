@@ -20,6 +20,7 @@ model User {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   sessions UserSession[]
+  files    FilesMetadata[]
 
   @@map("users")
 }
@@ -37,4 +38,43 @@ model UserSession {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_sessions")
+}
+
+model FilesMetadata {
+  id             String   @id // Google Drive File ID
+  userId         String   @map("user_id") @db.Uuid // User relationship
+  name           String
+  owner          String   // File owner email
+  mimeType       String   @map("mime_type")
+  size           BigInt?
+  modifiedTime   DateTime @map("modified_time")
+  createdTime    DateTime @map("created_time")
+  permissions    Json?
+  contentFetched Boolean  @default(false) @map("content_fetched")
+  extraMetadata  Json?    @map("extra_metadata") // Flexible field for future extensions
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chunks FileChunk[]
+
+  @@unique([id, userId]) // Same file can belong to different users
+  @@index([userId])
+  @@index([owner])
+  @@index([modifiedTime])
+  @@index([size])
+  @@map("files_metadata")
+}
+
+model FileChunk {
+  id         String   @id @default(uuid()) @db.Uuid
+  fileId     String   @map("file_id")
+  text       String
+  embedding  String? // Store as string, can be changed to vector type later
+  chunkIndex Int      @map("chunk_index")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  file FilesMetadata @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@map("file_chunks")
 }

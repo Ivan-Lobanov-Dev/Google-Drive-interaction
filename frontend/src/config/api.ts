@@ -16,6 +16,13 @@ export const API_CONFIG = {
       ME: '/auth/me',
       GOOGLE: '/auth/google',
       LOGOUT: '/auth/logout'
+    },
+    DRIVE: {
+      FILES: '/api/drive/files',
+      SYNC: '/api/drive/sync',
+      EXTRACT_ALL_CONTENT: '/api/drive/extract-all-content',
+      FILE_BY_ID: (id: string) => `/api/drive/files/${id}`,
+      EXTRACT_CONTENT: (id: string) => `/api/drive/files/${id}/extract-content`
     }
   }
 } as const
@@ -27,3 +34,4 @@ export const buildApiUrl = (endpoint: string): string => {
 
 // Export individual endpoints for convenience
 export const AUTH_ENDPOINTS = API_CONFIG.ENDPOINTS.AUTH
+export const DRIVE_ENDPOINTS = API_CONFIG.ENDPOINTS.DRIVE
