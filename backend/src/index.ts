@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 import { databasePool } from "./config/database.js";
 import { authRouter } from "./routes/auth.js";
 import { driveRouter } from "./routes/drive.js";
+import { aiRouter } from "./routes/ai.js";
 
 dotenv.config();
 
@@ -47,6 +48,9 @@ app.use('/auth', authRouter);
 
 // Drive routes
 app.use('/api/drive', driveRouter);
+
+// AI routes
+app.use('/api/ai', aiRouter);
 
 const PORT = process.env.PORT || 4000;
 

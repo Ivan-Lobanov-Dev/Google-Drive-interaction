@@ -20,7 +20,12 @@
         
         <!-- Drive Manager for authenticated users -->
         <div v-if="isAuthenticated" class="authenticated-content">
-          <DriveManager />
+          <!-- AI Question Interface - only show if files are loaded -->
+          <div v-if="hasFiles" class="ai-section">
+            <AIQuestionInterface />
+          </div>
+          
+          <DriveManager @files-loaded="handleFilesLoaded" @files-cleared="handleFilesCleared" />
         </div>
         
         <div v-if="!isAuthenticated" class="features">
@@ -48,11 +53,15 @@
 import { ref, onMounted } from 'vue'
 import UserAuth from '../components/UserAuth.vue'
 import DriveManager from '../components/DriveManager.vue'
+import AIQuestionInterface from '../components/AIQuestionInterface.vue'
 import { AuthService } from '../services/authService'
 
 // Authentication state - managed by HomeView
 const isAuthenticated = ref<boolean>(false)
 const isCheckingAuth = ref<boolean>(true)
+
+// Files state for AI interface visibility
+const hasFiles = ref<boolean>(false)
 
 // Check authentication status
 const checkAuthStatus = async (): Promise<void> => {
@@ -68,6 +77,19 @@ const checkAuthStatus = async (): Promise<void> => {
 // Handle authentication state changes from UserAuth component
 const handleAuthChange = (authenticated: boolean) => {
   isAuthenticated.value = authenticated
+  if (!authenticated) {
+    hasFiles.value = false // Clear files state when logged out
+  }
+}
+
+// Handle files loaded event from DriveManager
+const handleFilesLoaded = (filesCount: number) => {
+  hasFiles.value = filesCount > 0
+}
+
+// Handle files cleared event from DriveManager
+const handleFilesCleared = () => {
+  hasFiles.value = false
 }
 
 // Check auth on mount
@@ -126,6 +148,12 @@ onMounted(() => {
   text-align: left;
   margin-top: 2rem;
   width: 100%;
+}
+
+.ai-section {
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px solid #e1e5e9;
 }
 
 .authenticated-content h3 {

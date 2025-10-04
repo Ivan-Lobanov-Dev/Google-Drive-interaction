@@ -203,7 +203,7 @@ describe('Auth Middleware', () => {
       vi.mocked(google.auth.OAuth2).mockImplementation(() => ({
         setCredentials: vi.fn(),
         refreshAccessToken: mockRefreshAccessToken
-      }) as any)
+      }) as unknown as InstanceType<typeof google.auth.OAuth2>)
 
       mockRequest.cookies = { sessionId: 'session-token-123' }
       vi.mocked(prisma.userSession.findUnique).mockResolvedValue(mockSession as UserSessionWithUser)

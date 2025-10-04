@@ -23,10 +23,27 @@ using  AI Question Interface
    ```npm install```
 
 3. **Setup environment variables**
+
+   **Main Configuration (.env):**
+   ```env
+   # Database
+   DATABASE_URL=postgresql://username:password@localhost:5432/gdi_db
+   PORT=4000
    ```
-   # Backend environment
-   cp backend/.env.example backend/.env
-   # Add your Google OAuth credentials and other settings
+
+   **Google OAuth (.env.oauth):**
+   ```env
+   GOOGLE_CLIENT_ID=your_google_client_id_here
+   GOOGLE_CLIENT_SECRET=your_google_client_secret_here
+   GOOGLE_REDIRECT_URI=http://localhost:4000/auth/google/callback
+   ```
+
+   **OpenAI credentials (.env.ai):**
+   ```env
+   OPENAI_API_KEY=your_openai_api_key_here
+   OPENAI_MODEL=gpt-4o-mini
+   OPENAI_MAX_TOKENS=1000
+   OPENAI_TEMPERATURE=0.1
    ```
 
 4. **Start the databases**
@@ -65,7 +82,27 @@ See [TESTING.md](backend/TESTING.md) for detailed testing documentation.
 # 1. Architecture Document:
 
 ## End-to-end flow with Data Storage
-Google Drive → Extractor → Chunker → Embedder → Vector Store → Retriever → RAG Orchestrator → Answering → Audit Logging
+Google Drive → Extractor → Chunker → Embedder → Vector Store → Retriever → RAG Orchestrator → AI Provider → Answering → Audit Logging
+
+## AI Provider Architecture
+The system implements a modular AI provider architecture that allows easy switching between different AI services:
+
+- **AIProvider Interface**: Abstract interface defining contract for all AI services
+- **OpenAIAdapter**: Default implementation using OpenAI GPT-4o-mini and embeddings
+- **AIService**: Service layer that manages provider switching and fallbacks
+- **Extensible Design**: Easy to add Gemini, Claude, or other providers by implementing the AIProvider interface
+
+### Provider Switching Example
+```typescript
+// Use OpenAI (default)
+const aiService = new AIService();
+
+// Switch to Gemini
+const aiService = new AIService(new GeminiAdapter());
+
+// Switch to Claude
+const aiService = new AIService(new ClaudeAdapter());
+```
 
 - **Extractor**  
   - **When:** Runs when syncing Google Drive files or fetching updated content.  
@@ -105,11 +142,22 @@ Google Drive → Extractor → Chunker → Embedder → Vector Store → Retriev
 - **RAG Orchestrator**  
   - **When:** After Retriever fetches relevant chunks **for content-based queries only**.  
   - **Actions:**  
-    - For questions requiring file content (e.g., "Summarize Project Plan.pdf"), it combines only the **chunks the user has access to** (filtered by `user_id`) into a context block and sends it to the LLM for answer generation.  
+    - For questions requiring file content (e.g., "Summarize Project Plan.pdf"), it combines only the **chunks the user has access to** (filtered by `user_id`) into a context block and sends it to the AI Provider for answer generation.  
     - For questions based purely on metadata (e.g., "Which of my files is the largest?", "When did I last modify files?"), the RAG step is **skipped**. User-specific metadata from `files_metadata` is used directly to generate the answer.  
   - **Where Data is Accessed:**  
     - **Content queries:** filtered chunks from `file_chunks` joined with `files_metadata` (respecting `user_id` ACLs).  
     - **Metadata queries:** user-specific data from `files_metadata` (filtered by `user_id`; does not expose file content).  
+
+- **AI Provider**  
+  - **When:** After RAG Orchestrator prepares the context.  
+  - **Actions:**  
+    - Receives the question and context from RAG Orchestrator
+    - Uses the configured AI provider (OpenAI, Gemini, Claude, etc.) to generate answers
+    - Returns structured response with answer, confidence, sources, and reasoning
+  - **Provider Management:**  
+    - **Default**: OpenAI GPT-4o-mini for questions, text-embedding-3-small for embeddings
+    - **Extensible**: Easy switching between providers via AIProvider interface
+    - **Fallback**: Automatic fallback to alternative providers if primary fails
 
 
 - **Answering & Audit Logging**  
@@ -406,41 +454,133 @@ Smart synchronization with Google Drive - fetches only modified files since last
 - Handles large file sets with pagination
 - Robust error handling for content extraction failures
 
-## RAG Endpoints
+## AI Question Interface Endpoints
 
-### **POST** /rag/ingest-plan
+### **POST** `/api/ai/rag/query` ⭐ **UNIVERSAL ENDPOINT**
 
-- Request: 
+**Purpose:** Universal endpoint that automatically handles both metadata questions and content-based RAG queries.
+
+**Features:**
+- 🔍 **Smart Question Detection:** Automatically determines if question is about metadata or content
+- 📊 **Metadata Analysis:** Statistical questions about file properties, sizes, dates, owners  
+- 📚 **Content Search:** Semantic search through file content using RAG
+
+- **Authentication:** Required (session cookie)
+- **Request Body:**
+```json
 {
-  "fileIds": ["abc123", "def456"],
-  "dateRange": {"from": "2025-01-01", "to": "2025-09-01"}
-}
-
-- Response: 
-{
-  "plan": [
-    {"fileId": "abc123", "action": "chunk_and_embed"},
-    {"fileId": "def456", "action": "skip"}
-  ]
-}
-
-## **POST** /rag/query
-
-- Request:
-{
-  "question": "Which file was modified most recently?",
+  "question": "Who owns the most files?",
   "filters": {
-    "dateRange": {"from": "2025-01-01", "to": "2025-09-01"},
-    "owner": "user@example.com",
-    "mimeType": ["application/pdf"]
+    "dateRange": {
+      "start": "2024-01-01",
+      "end": "2024-12-31"
+    },
+    "fileTypes": ["application/pdf", "text/plain"],
+    "owners": ["user@example.com"]
   }
 }
+```
 
--Response:
+- **Response (Metadata Question):**
+```json
 {
-  "answer": "The file 'Project Plan.pdf' was modified most recently on 2025-09-25.",
-  "context": ["chunk1 text...", "chunk2 text..."]
+  "question": "Who owns the most files?",
+  "answer": "Based on your file metadata, you own 95% of the files...",
+  "confidence": 0.9,
+  "sources": [],
+  "reasoning": "Answer generated based on file metadata analysis",
+  "type": "metadata",
+  "statistics": {
+    "totalFiles": 150,
+    "totalSize": 2048576000,
+    "averageSize": 13657173,
+    "fileTypes": {"application/pdf": 45, "text/plain": 30},
+    "owners": {"user@example.com": 150}
+  },
+  "totalFiles": 150,
+  "filters": {...},
+  "timestamp": "2024-01-15T10:30:00.000Z"
 }
+```
+
+- **Response (Content Question):**
+```json
+{
+  "question": "What documents mention 'project planning'?",
+  "answer": "I found 3 documents that mention project planning...",
+  "confidence": 0.85,
+  "sources": ["doc1.pdf", "meeting_notes.docx"],
+  "reasoning": "Based on semantic search through file content",
+  "type": "content",
+  "context": [
+    {
+      "fileId": "123",
+      "fileName": "doc1.pdf", 
+      "chunkIndex": 2,
+      "text": "The project planning phase includes..."
+    }
+  ],
+  "totalFiles": 150,
+  "totalChunks": 450,
+  "filters": {...},
+  "timestamp": "2024-01-15T10:30:00.000Z"
+}
+```
+
+
+## RAG (Retrieval-Augmented Generation) Endpoints
+
+### **POST** /api/ai/rag/ingest-plan
+
+Returns a plan for ingestion based on file criteria.
+
+- **Authentication:** Required (session cookie)
+- **Request Body:**
+```json
+{
+  "fileIds": ["abc123", "def456"],
+  "dateRange": {
+    "start": "2025-01-01",
+    "end": "2025-12-31"
+  },
+  "fileTypes": ["application/pdf", "text/plain"],
+  "owners": ["user@example.com"]
+}
+```
+
+- **Response:**
+```json
+{
+  "plan": {
+    "totalFiles": 150,
+    "filesToProcess": 45,
+    "alreadyProcessed": 105,
+    "estimatedChunks": 450,
+    "strategy": "batch",
+    "fileTypes": ["application", "text", "image"],
+    "estimatedTime": "15 minutes",
+    "recommendations": [
+      "Consider processing in smaller batches",
+      "Large files detected - may take longer"
+    ]
+  },
+  "timestamp": "2025-01-15T10:30:00Z"
+}
+```
+
+> **Note:** The `/api/ai/rag/query` endpoint has been moved to the main AI Question Interface section above as the universal endpoint that handles both metadata and content questions.
+
+## AI Provider Architecture
+
+The system uses a modular AI provider architecture that allows easy switching between different AI services:
+
+### **AIProvider Interface**
+```typescript
+interface AIProvider {
+  answerQuestion(context: QuestionContext): Promise<AIResponse>;
+  getFileStatistics(files: DriveFileData[]): Promise<FileStatistics>;
+}
+```
 
 
 # 4. Security & Access Control:
