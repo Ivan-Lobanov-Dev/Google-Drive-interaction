@@ -16,7 +16,7 @@ router.get('/files', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const {
       page = '1',
-      limit = '20',
+      limit = '9',
       modifiedAfter,
       mimeType,
       search

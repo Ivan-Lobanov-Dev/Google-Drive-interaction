@@ -144,21 +144,34 @@
           :disabled="!pagination.hasPrev || loading.files"
           class="pagination-btn"
         >
-          Previous
+          ← Previous
         </button>
         
-        <span class="pagination-info">
-          Page {{ pagination.page }} of {{ pagination.totalPages }}
-          ({{ pagination.totalCount }} files)
-        </span>
+        <!-- Page Numbers -->
+        <div class="pagination-pages">
+          <button
+            v-for="page in getVisiblePages()"
+            :key="page"
+            @click="changePage(page)"
+            :class="['pagination-page', { active: page === pagination.page }]"
+            :disabled="loading.files"
+          >
+            {{ page }}
+          </button>
+        </div>
         
         <button
           @click="changePage(pagination.page + 1)"
           :disabled="!pagination.hasNext || loading.files"
           class="pagination-btn"
         >
-          Next
+          Next →
         </button>
+        
+        <span class="pagination-info">
+          Showing {{ (pagination.page - 1) * pagination.limit + 1 }}-{{ Math.min(pagination.page * pagination.limit, pagination.totalCount) }} 
+          of {{ pagination.totalCount }} files
+        </span>
       </div>
     </div>
 
@@ -218,7 +231,14 @@ const emit = defineEmits<{
 
 // State
 const files = ref<DriveFile[]>([])
-const pagination = ref<{ nextPageToken?: string; totalFiles?: number } | null>(null)
+const pagination = ref<{
+  page: number
+  limit: number
+  totalCount: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+} | null>(null)
 const error = ref<string | null>(null)
 const editingFile = ref<DriveFile | null>(null)
 const lastOperation = ref<{ type: string; message: string; timestamp: number } | null>(null)
@@ -235,7 +255,7 @@ const loading = reactive({
 // Filters
 const filters = reactive<DriveFilesFilters>({
   page: 1,
-  limit: 20,
+  limit: 9,
   search: '',
   mimeType: ''
 })
@@ -305,6 +325,37 @@ const closeOperationStats = () => {
 const changePage = (page: number) => {
   filters.page = page
   loadFiles()
+}
+
+const getVisiblePages = (): number[] => {
+  if (!pagination.value) return []
+  
+  const { page, totalPages } = pagination.value
+  const maxVisible = 5 // Show max 5 page numbers
+  const pages: number[] = []
+  
+  if (totalPages <= maxVisible) {
+    // Show all pages if total is small
+    for (let i = 1; i <= totalPages; i++) {
+      pages.push(i)
+    }
+  } else {
+    // Show smart pagination with ellipsis
+    const half = Math.floor(maxVisible / 2)
+    let start = Math.max(1, page - half)
+    let end = Math.min(totalPages, start + maxVisible - 1)
+    
+    // Adjust start if we're near the end
+    if (end - start < maxVisible - 1) {
+      start = Math.max(1, end - maxVisible + 1)
+    }
+    
+    for (let i = start; i <= end; i++) {
+      pages.push(i)
+    }
+  }
+  
+  return pages
 }
 
 const openFile = (url?: string) => {
@@ -693,34 +744,60 @@ onMounted(() => {
 
 .pagination {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
   gap: 1rem;
   margin-top: 2rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
 }
 
-.pagination-btn {
+.pagination-pages {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pagination-btn, .pagination-page {
   padding: 0.5rem 1rem;
   border: 1px solid #ddd;
   background: white;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
+  font-size: 14px;
+  min-width: 40px;
+  text-align: center;
 }
 
-.pagination-btn:hover:not(:disabled) {
+.pagination-btn:hover:not(:disabled),
+.pagination-page:hover:not(:disabled) {
   background: #f8f9fa;
   border-color: #4285f4;
 }
 
-.pagination-btn:disabled {
+.pagination-btn:disabled,
+.pagination-page:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.pagination-page.active {
+  background: #4285f4;
+  color: white;
+  border-color: #4285f4;
+}
+
+.pagination-page.active:hover {
+  background: #3367d6;
+  border-color: #3367d6;
 }
 
 .pagination-info {
   font-size: 14px;
   color: #666;
+  text-align: center;
 }
 
 /* Modal Styles */
