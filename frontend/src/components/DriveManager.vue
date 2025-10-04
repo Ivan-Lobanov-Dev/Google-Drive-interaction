@@ -210,6 +210,12 @@ import { ref, reactive, onMounted } from 'vue'
 import { DriveService } from '../services/driveService'
 import type { DriveFile, DriveFilesFilters } from '../types/drive'
 
+// Emits
+const emit = defineEmits<{
+  'files-loaded': [filesCount: number]
+  'files-cleared': []
+}>()
+
 // State
 const files = ref<DriveFile[]>([])
 const pagination = ref<{ nextPageToken?: string; totalFiles?: number } | null>(null)
@@ -259,8 +265,13 @@ const loadFiles = async () => {
     const response = await DriveService.getFiles(filters)
     files.value = response.files
     pagination.value = response.pagination
+    
+    // Emit files loaded event
+    emit('files-loaded', files.value.length)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load files'
+    // Emit files cleared event on error
+    emit('files-cleared')
   } finally {
     loading.files = false
   }
