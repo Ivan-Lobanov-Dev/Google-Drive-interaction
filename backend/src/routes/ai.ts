@@ -211,9 +211,6 @@ router.post('/rag/query', async (req: Request & { user?: { id: string; email?: s
       owner: file.owner || 'Unknown'
     }));
 
-    // Get file statistics
-    const statistics = await aiService.getFileStatistics(driveFiles);
-
     // Create question context for AI analysis
     const questionContext: QuestionContext = {
       question: trimmedQuestion,
@@ -221,7 +218,7 @@ router.post('/rag/query', async (req: Request & { user?: { id: string; email?: s
       userEmail: req.user.email || 'Unknown'
     };
 
-    // Get AI response with statistics
+    // Get AI response (includes statistics)
     const aiResponse = await aiService.answerQuestion(questionContext);
 
     return res.json({
@@ -231,7 +228,7 @@ router.post('/rag/query', async (req: Request & { user?: { id: string; email?: s
       sources: aiResponse.sources,
       reasoning: aiResponse.reasoning,
       type: 'metadata',
-      statistics: statistics,
+      statistics: aiResponse.statistics,
       totalFiles: files.length,
       filters: filters || {},
       timestamp: new Date().toISOString()

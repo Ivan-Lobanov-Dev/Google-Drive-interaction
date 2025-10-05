@@ -33,6 +33,7 @@ export interface AIResponse {
   confidence: number;
   sources: string[];
   reasoning?: string;
+  statistics?: FileStatistics;
 }
 
 export interface FileStatistics {
