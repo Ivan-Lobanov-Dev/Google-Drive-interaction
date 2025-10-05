@@ -280,6 +280,7 @@ export class GoogleDriveAdapter implements CloudStorageService {
                 size: BigInt(file.size),
                 modifiedTime: fileModifiedTime,
                 createdTime: new Date(file.createdTime),
+                permissions: JSON.parse(JSON.stringify(file.permissions || [])),
                 contentFetched: false, // Reset content extraction flag for updated files
                 extraMetadata: file.extraMetadata || {}
               }
@@ -310,6 +311,7 @@ export class GoogleDriveAdapter implements CloudStorageService {
               size: BigInt(file.size),
               modifiedTime: new Date(file.modifiedTime),
               createdTime: new Date(file.createdTime),
+              permissions: JSON.parse(JSON.stringify(file.permissions || [])),
               contentFetched: false,
               extraMetadata: file.extraMetadata || {}
             }
