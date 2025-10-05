@@ -62,7 +62,7 @@ export class OpenAIAdapter implements AIProvider {
         throw new Error('No response from OpenAI');
       }
 
-      return this.parseAIResponse(response, context.files);
+      return this.parseAIResponse(response, context.files, context.question);
     } catch (error: unknown) {
       // Log error details for debugging
       console.error('OpenAI API error:', error);
@@ -206,7 +206,7 @@ Answer based on this data.`;
   /**
    * Parse AI response and extract structured data
    */
-  private parseAIResponse(response: string, files: DriveFileData[]): AIResponse {
+  private parseAIResponse(response: string, files: DriveFileData[], question?: string): AIResponse {
     // Generate statistics from files
     const statistics = this.generateFileStatistics(files);
     
@@ -216,7 +216,7 @@ Answer based on this data.`;
       return {
         answer: parsed.answer || response,
         confidence: parsed.confidence || 0.8,
-        sources: parsed.sources || [],
+        sources: [],
         reasoning: parsed.reasoning,
         statistics
       };
@@ -225,12 +225,13 @@ Answer based on this data.`;
       return {
         answer: response,
         confidence: 0.7,
-        sources: files.slice(0, 3).map(f => f.name), // Use first few files as sources
+        sources: [],
         reasoning: 'Response parsed as plain text',
         statistics
       };
     }
   }
+
 
   private generateFileStatistics(files: DriveFileData[]): FileStatistics {
     const totalFiles = files.length;
