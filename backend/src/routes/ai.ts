@@ -47,23 +47,60 @@ interface QueryFilters {
 }
 
 // Helper function to determine if question needs all files (not just user's files)
+// All metadata questions should search across ALL files, not just user's files
 function needsAllFiles(question: string): boolean {
-  const allFilesKeywords = [
-    'who owns the most',
-    'who has the most',
-    'which user has',
-    'which owner has',
+  const metadataKeywords = [
+    // Ownership questions
+    'who owns',
+    'who has',
+    'which user',
+    'which owner',
     'most files',
     'largest owner',
     'total files',
     'all files',
     'everyone',
-    'all users'
+    'all users',
+    'average number of files per owner',
+    'files per owner',
+    
+    // File analysis questions
+    'which file was modified most recently',
+    'most recently modified',
+    'latest file',
+    'newest file',
+    'which file is the largest',
+    'largest file',
+    'biggest file',
+    'file size',
+    'largest files',
+    'modified most recently',
+    'recently modified',
+    'is the largest',
+    'biggest',
+    
+    // Distribution questions
+    'distribution of files',
+    'file distribution',
+    'by their last modified date',
+    'by modified date',
+    'by date',
+    'file types',
+    'type distribution',
+    
+    // Statistical questions
+    'how many files',
+    'total number',
+    'count of files',
+    'file count',
+    'statistics',
+    'overview'
   ];
   
   const lowerQuestion = question.toLowerCase();
-  return allFilesKeywords.some(keyword => lowerQuestion.includes(keyword));
+  return metadataKeywords.some(keyword => lowerQuestion.includes(keyword));
 }
+
 
 // Helper function to get filtered files
 async function getFilteredFiles(userId: string, question: string, filters?: QueryFilters): Promise<Array<{
@@ -84,6 +121,8 @@ async function getFilteredFiles(userId: string, question: string, filters?: Quer
   const whereClause: Record<string, unknown> = {};
   
   // Only filter by userId if question doesn't need all files
+  // Metadata questions (statistics, ownership, file analysis) → ALL files
+  // Content questions (future RAG implementation) → USER files only
   if (!needsAllFiles(question)) {
     whereClause.userId = userId;
   }
@@ -200,8 +239,16 @@ router.post('/rag/query', async (req: Request & { user?: { id: string; email?: s
       });
     }
 
-    // Transform files for statistics - limit to essential data to reduce token usage
-    const driveFiles = files.slice(0, 50).map(file => ({
+    // Transform files for statistics - limit based on question type to reduce token usage
+    // Use the same needsAllFiles function that determines the database query
+    const maxFiles = needsAllFiles(trimmedQuestion) ? files.length : Math.min(files.length, 50);
+    
+    // Debug logging for file counts
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`AI Query: "${trimmedQuestion}" - Found ${files.length} files, sending ${maxFiles} to AI (needsAllFiles: ${needsAllFiles(trimmedQuestion)})`);
+    }
+    
+    const driveFiles = files.slice(0, maxFiles).map(file => ({
       id: file.id,
       name: file.name,
       mimeType: file.mimeType,
