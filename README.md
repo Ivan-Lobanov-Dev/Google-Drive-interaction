@@ -266,6 +266,21 @@ Table name: users_request
 | file\_ids   | JSON      | List of files/chunks that were used             |
 | created\_at | timestamp | Request time                                    |
 
+Table name: sync_status
+
+| Column         | Type        | Description                        |
+| -------------- | ----------- | ---------------------------------- |
+| id             | UUID (PK)   | Sync status ID                     |
+| user_id        | UUID (FK)   | Reference to users.id (unique)     |
+| is_running     | boolean     | Whether sync is currently running  |
+| started_at     | timestamp   | When sync started                  |
+| completed_at   | timestamp   | When sync completed                |
+| error_message  | string      | Error message if sync failed       |
+| created_at     | timestamp   | Record creation time               |
+| updated_at     | timestamp   | Record last update time            |
+
+- **Note:** One-to-one relationship with users table to track sync status per user
+
 
 ## Vector database
 
@@ -344,11 +359,12 @@ Get files from database with pagination and filtering.
 - **Authentication:** Required (session cookie)
 - **Query Parameters:**
   - `page` (number, optional): Page number (default: 1)
-  - `limit` (number, optional): Items per page (default: 20)
+  - `limit` (number, optional): Items per page (default: 9)
   - `modifiedAfter` (string, optional): ISO date string
   - `modifiedBefore` (string, optional): ISO date string
   - `mimeType` (string, optional): Filter by MIME type
   - `search` (string, optional): Search in file names
+  - `contentFetched` (boolean, optional): Filter by content extraction status
 
 - **Response:**
 ```json
@@ -443,7 +459,8 @@ Smart synchronization with Google Drive - fetches only modified files since last
     "totalSaved": 15,
     "totalSkipped": 10,
     "contentExtracted": 12,
-    "contentFailed": 3
+    "contentFailed": 3,
+    "totalDeleted": 2
   }
 }
 ```
@@ -453,6 +470,39 @@ Smart synchronization with Google Drive - fetches only modified files since last
 - Includes content extraction statistics
 - Handles large file sets with pagination
 - Robust error handling for content extraction failures
+- **Sync Protection:** Prevents concurrent sync operations for the same user
+- **Status Tracking:** Tracks sync progress and handles stuck syncs
+
+**Error Responses:**
+- `409 Conflict` - When sync is already in progress
+- `500 Internal Server Error` - When sync fails or tracking fails
+
+### **GET** /api/drive/sync/status
+
+Get current sync status for the authenticated user.
+
+- **Authentication:** Required (session cookie)
+- **Response:**
+```json
+{
+  "isRunning": false,
+  "startedAt": "2024-01-15T10:30:00Z",
+  "completedAt": "2024-01-15T10:35:00Z",
+  "errorMessage": null
+}
+```
+
+### **POST** /api/drive/sync/reset
+
+Reset sync status for the authenticated user (useful for stuck syncs).
+
+- **Authentication:** Required (session cookie)
+- **Response:**
+```json
+{
+  "message": "Sync status reset successfully"
+}
+```
 
 ## AI Question Interface Endpoints
 

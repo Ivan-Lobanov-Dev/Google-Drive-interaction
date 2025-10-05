@@ -235,7 +235,6 @@ export class GoogleDriveAdapter implements CloudStorageService {
               }
             });
             deleted++;
-            console.log(`Deleted file ${file.id} (${file.name}) from database - was trashed in Google Drive`);
           }
           continue; // Skip processing this file further
         }
@@ -348,11 +347,9 @@ export class GoogleDriveAdapter implements CloudStorageService {
 
                 contentExtracted++;
               } else {
-                console.log(`No chunks created for file ${file.id} (${file.name})`);
                 contentFailed++;
               }
             } else {
-              console.log(`No content extracted for file ${file.id} (${file.name}) - unsupported type: ${file.mimeType}`);
               contentFailed++;
             }
           } catch (contentError) {

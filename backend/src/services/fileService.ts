@@ -20,13 +20,16 @@ export interface FileListResult {
     modifiedTime: string;
     createdTime: string;
     contentFetched: boolean;
+    owner: string;
     extraMetadata?: unknown;
   }>;
   pagination: {
-    nextPageToken?: string;
-    totalCount?: number;
-    page?: number;
-    limit?: number;
+    page: number;
+    limit: number;
+    totalCount: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
   };
 }
 
@@ -37,7 +40,7 @@ export class FileService {
   async getFiles(userId: string, filters: FileFilters = {}): Promise<FileListResult> {
     const {
       page = 1,
-      limit = 20,
+      limit = 9,
       search,
       mimeType,
       modifiedAfter,
@@ -86,11 +89,16 @@ export class FileService {
           modifiedTime: true,
           createdTime: true,
           contentFetched: true,
+          owner: true,
           extraMetadata: true
         }
       }),
       prisma.filesMetadata.count({ where })
     ]);
+
+    const totalPages = Math.ceil(totalCount / limit);
+    const hasNext = page < totalPages;
+    const hasPrev = page > 1;
 
     return {
       files: files.map(file => ({
@@ -101,12 +109,16 @@ export class FileService {
         modifiedTime: file.modifiedTime.toISOString(),
         createdTime: file.createdTime.toISOString(),
         contentFetched: file.contentFetched,
+        owner: file.owner,
         extraMetadata: file.extraMetadata
       })),
       pagination: {
+        page,
+        limit,
         totalCount,
-        page: page,
-        limit: limit
+        totalPages,
+        hasNext,
+        hasPrev
       }
     };
   }
@@ -233,6 +245,7 @@ export class FileService {
           modifiedTime: true,
           createdTime: true,
           contentFetched: true,
+          owner: true,
           extraMetadata: true
         }
       });

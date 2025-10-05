@@ -73,6 +73,27 @@ export class DriveService {
   }
 
   /**
+   * Get current sync status
+   */
+  static async getSyncStatus(): Promise<{
+    isRunning: boolean;
+    startedAt?: string;
+    completedAt?: string;
+    errorMessage?: string;
+  }> {
+    return this.makeRequest('/api/drive/sync/status')
+  }
+
+  /**
+   * Reset sync status (for stuck syncs)
+   */
+  static async resetSyncStatus(): Promise<{ message: string }> {
+    return this.makeRequest('/api/drive/sync/reset', {
+      method: 'POST'
+    })
+  }
+
+  /**
    * Update file
    */
   static async updateFile(id: string, updates: UpdateFileRequest): Promise<{ message: string; file: DriveFile }> {

@@ -6,10 +6,18 @@
         <button 
           @click="syncFiles" 
           class="btn btn-primary"
+          :disabled="loading.sync || (syncStatus?.isRunning ?? false)"
+        >
+          <span v-if="loading.sync || (syncStatus?.isRunning ?? false)">Syncing...</span>
+          <span v-else>Sync Files</span>
+        </button>
+        <button 
+          v-if="syncStatus?.isRunning"
+          @click="resetSyncStatus" 
+          class="btn btn-secondary"
           :disabled="loading.sync"
         >
-          <span v-if="loading.sync">Syncing...</span>
-          <span v-else>Sync Files</span>
+          Reset Sync
         </button>
       </div>
     </div>
@@ -144,21 +152,34 @@
           :disabled="!pagination.hasPrev || loading.files"
           class="pagination-btn"
         >
-          Previous
+          ← Previous
         </button>
         
-        <span class="pagination-info">
-          Page {{ pagination.page }} of {{ pagination.totalPages }}
-          ({{ pagination.totalCount }} files)
-        </span>
+        <!-- Page Numbers -->
+        <div class="pagination-pages">
+          <button
+            v-for="page in getVisiblePages()"
+            :key="page"
+            @click="changePage(page)"
+            :class="['pagination-page', { active: page === pagination.page }]"
+            :disabled="loading.files"
+          >
+            {{ page }}
+          </button>
+        </div>
         
         <button
           @click="changePage(pagination.page + 1)"
           :disabled="!pagination.hasNext || loading.files"
           class="pagination-btn"
         >
-          Next
+          Next →
         </button>
+        
+        <span class="pagination-info">
+          Showing {{ (pagination.page - 1) * pagination.limit + 1 }}-{{ Math.min(pagination.page * pagination.limit, pagination.totalCount) }} 
+          of {{ pagination.totalCount }} files
+        </span>
       </div>
     </div>
 
@@ -218,7 +239,14 @@ const emit = defineEmits<{
 
 // State
 const files = ref<DriveFile[]>([])
-const pagination = ref<{ nextPageToken?: string; totalFiles?: number } | null>(null)
+const pagination = ref<{
+  page: number
+  limit: number
+  totalCount: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+} | null>(null)
 const error = ref<string | null>(null)
 const editingFile = ref<DriveFile | null>(null)
 const lastOperation = ref<{ type: string; message: string; timestamp: number } | null>(null)
@@ -232,10 +260,18 @@ const loading = reactive({
   extract: null as string | null
 })
 
+// Sync status
+const syncStatus = ref<{
+  isRunning: boolean
+  startedAt?: string
+  completedAt?: string
+  errorMessage?: string
+} | null>(null)
+
 // Filters
 const filters = reactive<DriveFilesFilters>({
   page: 1,
-  limit: 20,
+  limit: 9,
   search: '',
   mimeType: ''
 })
@@ -277,8 +313,36 @@ const loadFiles = async () => {
   }
 }
 
+const checkSyncStatus = async () => {
+  try {
+    const status = await DriveService.getSyncStatus()
+    syncStatus.value = status
+    return status.isRunning
+  } catch (err) {
+    console.error('Failed to check sync status:', err)
+    return false
+  }
+}
+
+const resetSyncStatus = async () => {
+  try {
+    await DriveService.resetSyncStatus()
+    await checkSyncStatus()
+    error.value = null
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to reset sync status'
+  }
+}
+
 const syncFiles = async () => {
   try {
+    // Check if sync is already running
+    const isRunning = await checkSyncStatus()
+    if (isRunning) {
+      error.value = 'Synchronization is already in progress. Please wait for it to complete.'
+      return
+    }
+
     loading.sync = true
     error.value = null
     
@@ -291,8 +355,21 @@ const syncFiles = async () => {
     
     // Refresh the files list after sync
     await loadFiles()
+    
+    // Update sync status
+    await checkSyncStatus()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to sync files'
+    const errorMessage = err instanceof Error ? err.message : 'Failed to sync files'
+    
+    // Check if it's a "sync already in progress" error
+    if (errorMessage.includes('Sync already in progress')) {
+      error.value = 'Synchronization is already in progress. Please wait for it to complete.'
+    } else {
+      error.value = errorMessage
+    }
+    
+    // Update sync status
+    await checkSyncStatus()
   } finally {
     loading.sync = false
   }
@@ -305,6 +382,37 @@ const closeOperationStats = () => {
 const changePage = (page: number) => {
   filters.page = page
   loadFiles()
+}
+
+const getVisiblePages = (): number[] => {
+  if (!pagination.value) return []
+  
+  const { page, totalPages } = pagination.value
+  const maxVisible = 5 // Show max 5 page numbers
+  const pages: number[] = []
+  
+  if (totalPages <= maxVisible) {
+    // Show all pages if total is small
+    for (let i = 1; i <= totalPages; i++) {
+      pages.push(i)
+    }
+  } else {
+    // Show smart pagination with ellipsis
+    const half = Math.floor(maxVisible / 2)
+    let start = Math.max(1, page - half)
+    let end = Math.min(totalPages, start + maxVisible - 1)
+    
+    // Adjust start if we're near the end
+    if (end - start < maxVisible - 1) {
+      start = Math.max(1, end - maxVisible + 1)
+    }
+    
+    for (let i = start; i <= end; i++) {
+      pages.push(i)
+    }
+  }
+  
+  return pages
 }
 
 const openFile = (url?: string) => {
@@ -392,8 +500,9 @@ const extractFileContent = async (file: DriveFile) => {
 
 
 // Lifecycle
-onMounted(() => {
-  loadFiles()
+onMounted(async () => {
+  await loadFiles()
+  await checkSyncStatus()
 })
 </script>
 
@@ -693,34 +802,60 @@ onMounted(() => {
 
 .pagination {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
   gap: 1rem;
   margin-top: 2rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
 }
 
-.pagination-btn {
+.pagination-pages {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pagination-btn, .pagination-page {
   padding: 0.5rem 1rem;
   border: 1px solid #ddd;
   background: white;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
+  font-size: 14px;
+  min-width: 40px;
+  text-align: center;
 }
 
-.pagination-btn:hover:not(:disabled) {
+.pagination-btn:hover:not(:disabled),
+.pagination-page:hover:not(:disabled) {
   background: #f8f9fa;
   border-color: #4285f4;
 }
 
-.pagination-btn:disabled {
+.pagination-btn:disabled,
+.pagination-page:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.pagination-page.active {
+  background: #4285f4;
+  color: white;
+  border-color: #4285f4;
+}
+
+.pagination-page.active:hover {
+  background: #3367d6;
+  border-color: #3367d6;
 }
 
 .pagination-info {
   font-size: 14px;
   color: #666;
+  text-align: center;
 }
 
 /* Modal Styles */
