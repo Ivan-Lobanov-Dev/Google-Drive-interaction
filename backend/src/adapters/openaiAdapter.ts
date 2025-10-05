@@ -207,6 +207,9 @@ Answer based on this data.`;
    * Parse AI response and extract structured data
    */
   private parseAIResponse(response: string, files: DriveFileData[]): AIResponse {
+    // Generate statistics from files
+    const statistics = this.generateFileStatistics(files);
+    
     try {
       // Try to parse as JSON first
       const parsed = JSON.parse(response);
@@ -214,7 +217,8 @@ Answer based on this data.`;
         answer: parsed.answer || response,
         confidence: parsed.confidence || 0.8,
         sources: parsed.sources || [],
-        reasoning: parsed.reasoning
+        reasoning: parsed.reasoning,
+        statistics
       };
     } catch {
       // If not JSON, treat as plain text answer
@@ -222,9 +226,50 @@ Answer based on this data.`;
         answer: response,
         confidence: 0.7,
         sources: files.slice(0, 3).map(f => f.name), // Use first few files as sources
-        reasoning: 'Response parsed as plain text'
+        reasoning: 'Response parsed as plain text',
+        statistics
       };
     }
+  }
+
+  private generateFileStatistics(files: DriveFileData[]): FileStatistics {
+    const totalFiles = files.length;
+    const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+    const averageSize = totalFiles > 0 ? Math.round(totalSize / totalFiles) : 0;
+    
+    // Count file types
+    const fileTypes: Record<string, number> = {};
+    files.forEach(file => {
+      const type = file.mimeType.split('/')[0]; // Get main type (e.g., 'application' from 'application/pdf')
+      fileTypes[type] = (fileTypes[type] || 0) + 1;
+    });
+    
+    // Count owners
+    const owners: Record<string, number> = {};
+    files.forEach(file => {
+      const owner = file.owner || 'Unknown';
+      owners[owner] = (owners[owner] || 0) + 1;
+    });
+    
+    // Get recent files (last 5)
+    const recentFiles = [...files]
+      .sort((a, b) => new Date(b.modifiedTime).getTime() - new Date(a.modifiedTime).getTime())
+      .slice(0, 5);
+    
+    // Get largest files (top 5)
+    const largestFiles = [...files]
+      .sort((a, b) => b.size - a.size)
+      .slice(0, 5);
+    
+    return {
+      totalFiles,
+      totalSize,
+      averageSize,
+      fileTypes,
+      owners,
+      recentFiles,
+      largestFiles
+    };
   }
 
   /**
