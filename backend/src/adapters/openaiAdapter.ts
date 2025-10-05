@@ -240,7 +240,7 @@ Answer based on this data.`;
     // Count file types
     const fileTypes: Record<string, number> = {};
     files.forEach(file => {
-      const type = file.mimeType.split('/')[0]; // Get main type (e.g., 'application' from 'application/pdf')
+      const type = file.mimeType?.split('/')[0] || 'unknown'; // Get main type (e.g., 'application' from 'application/pdf')
       fileTypes[type] = (fileTypes[type] || 0) + 1;
     });
     
