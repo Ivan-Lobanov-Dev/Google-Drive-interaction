@@ -100,7 +100,11 @@ export class ContentExtractionService {
 
       return content.trim();
     } catch (error) {
-      console.error(`Error extracting content from file ${fileId}:`, error);
+      // Log extraction errors at debug level only, as some files may have
+      // complex formatting that cannot be extracted, which is expected
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`Warning: Could not extract content from file ${fileId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
       return null;
     }
   }
@@ -394,7 +398,11 @@ export class ContentExtractionService {
 
       return result.value;
     } catch (error) {
-      console.error(`Error extracting Word text from file ${fileId}:`, error);
+      // Log error at debug level only, as some DOCX files may have complex formatting
+      // that mammoth cannot handle, which is expected behavior
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`Warning: Could not extract text from DOCX file ${fileId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
       throw new Error(`Failed to extract Word text: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }

@@ -110,9 +110,14 @@ export class GoogleDriveAdapter implements CloudStorageService {
         q += q ? ` and ${query}` : query;
       }
       
-      // If no query conditions, fetch all files
+      // If no query conditions, fetch all files (including trashed)
       if (!q) {
         q = 'trashed=true or trashed=false';
+      }
+      
+      // Ensure we always include trashed files to detect deletions
+      if (q && !q.includes('trashed')) {
+        q += ' and (trashed=true or trashed=false)';
       }
 
       const DRIVE_FILE_FIELDS =
@@ -210,6 +215,8 @@ export class GoogleDriveAdapter implements CloudStorageService {
     let contentExtracted = 0;
     let contentFailed = 0;
     let deleted = 0;
+
+    // Check for trashed files (will be handled in the loop below)
 
     for (const file of files) {
       try {
@@ -362,6 +369,9 @@ export class GoogleDriveAdapter implements CloudStorageService {
         contentFailed++;
       }
     }
+
+    // NOTE: Orphaned file detection removed - it was causing false deletions
+    // because files might not appear in a single API page but still exist in Google Drive
 
     return {
       saved,
