@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,54 +8,52 @@ datasource db {
 }
 
 model User {
-  id            String   @id @default(uuid()) @db.Uuid
-  googleUserId  String   @unique @map("google_user_id")
-  email         String
-  name          String?
-  pictureUrl    String?  @map("picture_url")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  sessions UserSession[]
-  files    FilesMetadata[]
+  id           String          @id @default(uuid()) @db.Uuid
+  googleUserId String          @unique @map("google_user_id")
+  email        String
+  name         String?
+  pictureUrl   String?         @map("picture_url")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  files        FilesMetadata[]
+  syncStatus   SyncStatus?
+  sessions     UserSession[]
 
   @@map("users")
 }
 
 model UserSession {
-  id              String   @id @default(uuid()) @db.Uuid
-  userId          String   @map("user_id") @db.Uuid
-  sessionId       String   @unique @default(uuid()) @map("session_id") @db.Uuid
-  accessToken     String   @map("access_token")
-  refreshToken    String?  @map("refresh_token")
-  tokenExpiresAt  DateTime @map("token_expires_at")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  sessionId      String   @unique @default(uuid()) @map("session_id") @db.Uuid
+  accessToken    String   @map("access_token")
+  refreshToken   String?  @map("refresh_token")
+  tokenExpiresAt DateTime @map("token_expires_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_sessions")
 }
 
 model FilesMetadata {
-  id             String   @id // Google Drive File ID
-  userId         String   @map("user_id") @db.Uuid // User relationship
+  id             String      @id
+  userId         String      @map("user_id") @db.Uuid
   name           String
-  owner          String   // File owner email
-  mimeType       String   @map("mime_type")
+  owner          String
+  mimeType       String      @map("mime_type")
   size           BigInt?
-  modifiedTime   DateTime @map("modified_time")
-  createdTime    DateTime @map("created_time")
+  modifiedTime   DateTime    @map("modified_time")
+  createdTime    DateTime    @map("created_time")
   permissions    Json?
-  contentFetched Boolean  @default(false) @map("content_fetched")
-  extraMetadata  Json?    @map("extra_metadata") // Flexible field for future extensions
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  contentFetched Boolean     @default(false) @map("content_fetched")
+  extraMetadata  Json?       @map("extra_metadata")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+  chunks         FileChunk[]
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  chunks FileChunk[]
-
-  @@unique([id, userId]) // Same file can belong to different users
+  @@unique([id, userId])
   @@index([userId])
   @@index([owner])
   @@index([modifiedTime])
@@ -67,14 +62,27 @@ model FilesMetadata {
 }
 
 model FileChunk {
-  id         String   @id @default(uuid()) @db.Uuid
-  fileId     String   @map("file_id")
+  id         String        @id @default(uuid()) @db.Uuid
+  fileId     String        @map("file_id")
   text       String
-  embedding  String? // Store as string, can be changed to vector type later
-  chunkIndex Int      @map("chunk_index")
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  file FilesMetadata @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  embedding  String?
+  chunkIndex Int           @map("chunk_index")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  file       FilesMetadata @relation(fields: [fileId], references: [id], onDelete: Cascade)
 
   @@map("file_chunks")
+}
+
+model SyncStatus {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @unique @map("user_id") @db.Uuid
+  isRunning    Boolean   @default(false) @map("is_running")
+  startedAt    DateTime? @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+  errorMessage String?   @map("error_message")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sync_status")
 }

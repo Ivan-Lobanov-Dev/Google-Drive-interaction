@@ -31,7 +31,6 @@ const initModules = (): void => {
   if (!mammoth) {
     try {
       mammoth = require('mammoth');
-      console.log('✓ mammoth loaded successfully');
     } catch (error) {
       if (error instanceof Error) {
         console.warn('⚠ mammoth not available:', error.message);
@@ -44,7 +43,6 @@ const initModules = (): void => {
   if (!XLSX) {
     try {
       XLSX = require('xlsx');
-      console.log('✓ xlsx loaded successfully');
     } catch (error) {
       if (error instanceof Error) {
         console.warn('⚠ xlsx not available:', error.message);
@@ -58,7 +56,6 @@ const initModules = (): void => {
 // Initialize modules on load
 initModules();
 
-console.log('✓ pdfjs-dist loaded successfully');
 
 export class ContentExtractionService {
   private drive: drive_v3.Drive;
@@ -98,7 +95,6 @@ export class ContentExtractionService {
         content = await this.downloadTextFile(fileId);
       } else {
         // For other file types, return null for now
-        console.log(`Unsupported file type for content extraction: ${mimeType}`);
         return null;
       }
 
@@ -451,16 +447,10 @@ export class ContentExtractionService {
    * Extract text from PowerPoint file (.pptx, .ppt)
    * Basic support - just return placeholder text for now
    */
-  private async extractPowerPointText(fileId: string): Promise<string> {
-    try {
-      // For PowerPoint files, return basic information for now
-      // In the future, we can add a library for extracting text from slides
-      console.log(`PowerPoint extraction not fully implemented for file ${fileId}`);
-      return 'PowerPoint content extraction - coming soon';
-    } catch (error) {
-      console.error(`Error extracting PowerPoint text from file ${fileId}:`, error);
-      throw new Error(`Failed to extract PowerPoint text: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+  private async extractPowerPointText(_fileId: string): Promise<string> {
+    // For PowerPoint files, return basic information for now
+    // In the future, we can add a library for extracting text from slides
+    return 'PowerPoint content extraction - coming soon';
   }
 
 }

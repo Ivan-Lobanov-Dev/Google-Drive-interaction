@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth.js';
 import { ServiceFactory } from '../factories/serviceFactory.js';
 import { FileService } from '../services/fileService.js';
+import { SyncStatusService } from '../services/syncStatusService.js';
 
 const router = Router();
 
@@ -138,14 +139,80 @@ router.post('/sync', async (req: AuthenticatedRequest, res: Response) => {
       return res.status(401).json({ error: 'Access token not available' });
     }
 
-    // Always create new instances with current token to ensure fresh authentication
-    const driveUseCases = ServiceFactory.createDriveUseCases(req.session.accessToken);
-    const result = await driveUseCases.syncFiles(req.user!.id);
+    const userId = req.user!.id;
 
-    return res.json(result);
+    // Check if sync is already running
+    const isSyncRunning = await SyncStatusService.isSyncRunning(userId);
+    if (isSyncRunning) {
+      return res.status(409).json({ 
+        error: 'Sync already in progress',
+        message: 'Please wait for the current synchronization to complete before starting a new one'
+      });
+    }
+
+    // Start sync status tracking
+    const syncStarted = await SyncStatusService.startSync(userId);
+    if (!syncStarted) {
+      return res.status(500).json({ error: 'Failed to start sync tracking' });
+    }
+
+    try {
+      // Always create new instances with current token to ensure fresh authentication
+      const driveUseCases = ServiceFactory.createDriveUseCases(req.session.accessToken);
+      const result = await driveUseCases.syncFiles(userId);
+
+      // Mark sync as completed
+      await SyncStatusService.completeSync(userId);
+
+      return res.json(result);
+    } catch (syncError) {
+      // Mark sync as failed
+      const errorMessage = syncError instanceof Error ? syncError.message : 'Unknown error';
+      await SyncStatusService.failSync(userId, errorMessage);
+      
+      console.error('Error syncing files:', syncError);
+      return res.status(500).json({ error: 'Failed to sync files' });
+    }
   } catch (error) {
-    console.error('Error syncing files:', error);
+    console.error('Error in sync endpoint:', error);
     return res.status(500).json({ error: 'Failed to sync files' });
+  }
+});
+
+/**
+ * GET /api/drive/sync/status
+ * Get current sync status for the user
+ */
+router.get('/sync/status', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const syncStatus = await SyncStatusService.getSyncStatus(userId);
+    
+    return res.json({
+      isRunning: syncStatus?.isRunning ?? false,
+      startedAt: syncStatus?.startedAt,
+      completedAt: syncStatus?.completedAt,
+      errorMessage: syncStatus?.errorMessage
+    });
+  } catch (error) {
+    console.error('Error getting sync status:', error);
+    return res.status(500).json({ error: 'Failed to get sync status' });
+  }
+});
+
+/**
+ * POST /api/drive/sync/reset
+ * Reset sync status (for stuck syncs)
+ */
+router.post('/sync/reset', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    await SyncStatusService.resetSyncStatus(userId);
+    
+    return res.json({ message: 'Sync status reset successfully' });
+  } catch (error) {
+    console.error('Error resetting sync status:', error);
+    return res.status(500).json({ error: 'Failed to reset sync status' });
   }
 });
 

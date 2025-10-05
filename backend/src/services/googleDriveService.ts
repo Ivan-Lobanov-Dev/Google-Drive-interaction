@@ -309,15 +309,12 @@ export class GoogleDriveService {
         // Automatically extract content if file supports it and content needs updating
         if (shouldExtractContent && this.canExtractContent(file.mimeType || 'unknown')) {
           try {
-            console.log(`Auto-extracting content for file: ${file.name || 'Untitled'} (${file.id})`);
             const extractResult = await contentService.processFile(file.id!, file.mimeType || 'unknown');
             
             if (extractResult.success) {
               contentExtracted++;
-              console.log(`✓ Content extracted for ${file.name || 'Untitled'}: ${extractResult.chunksCount} chunks`);
             } else {
               contentFailed++;
-              console.log(`✗ Failed to extract content for ${file.name || 'Untitled'}: ${extractResult.error}`);
             }
           } catch (extractError) {
             contentFailed++;

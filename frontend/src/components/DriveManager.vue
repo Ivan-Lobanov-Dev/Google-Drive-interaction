@@ -6,10 +6,18 @@
         <button 
           @click="syncFiles" 
           class="btn btn-primary"
+          :disabled="loading.sync || (syncStatus?.isRunning ?? false)"
+        >
+          <span v-if="loading.sync || (syncStatus?.isRunning ?? false)">Syncing...</span>
+          <span v-else>Sync Files</span>
+        </button>
+        <button 
+          v-if="syncStatus?.isRunning"
+          @click="resetSyncStatus" 
+          class="btn btn-secondary"
           :disabled="loading.sync"
         >
-          <span v-if="loading.sync">Syncing...</span>
-          <span v-else>Sync Files</span>
+          Reset Sync
         </button>
       </div>
     </div>
@@ -252,6 +260,14 @@ const loading = reactive({
   extract: null as string | null
 })
 
+// Sync status
+const syncStatus = ref<{
+  isRunning: boolean
+  startedAt?: string
+  completedAt?: string
+  errorMessage?: string
+} | null>(null)
+
 // Filters
 const filters = reactive<DriveFilesFilters>({
   page: 1,
@@ -297,8 +313,36 @@ const loadFiles = async () => {
   }
 }
 
+const checkSyncStatus = async () => {
+  try {
+    const status = await DriveService.getSyncStatus()
+    syncStatus.value = status
+    return status.isRunning
+  } catch (err) {
+    console.error('Failed to check sync status:', err)
+    return false
+  }
+}
+
+const resetSyncStatus = async () => {
+  try {
+    await DriveService.resetSyncStatus()
+    await checkSyncStatus()
+    error.value = null
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to reset sync status'
+  }
+}
+
 const syncFiles = async () => {
   try {
+    // Check if sync is already running
+    const isRunning = await checkSyncStatus()
+    if (isRunning) {
+      error.value = 'Synchronization is already in progress. Please wait for it to complete.'
+      return
+    }
+
     loading.sync = true
     error.value = null
     
@@ -311,8 +355,21 @@ const syncFiles = async () => {
     
     // Refresh the files list after sync
     await loadFiles()
+    
+    // Update sync status
+    await checkSyncStatus()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to sync files'
+    const errorMessage = err instanceof Error ? err.message : 'Failed to sync files'
+    
+    // Check if it's a "sync already in progress" error
+    if (errorMessage.includes('Sync already in progress')) {
+      error.value = 'Synchronization is already in progress. Please wait for it to complete.'
+    } else {
+      error.value = errorMessage
+    }
+    
+    // Update sync status
+    await checkSyncStatus()
   } finally {
     loading.sync = false
   }
@@ -443,8 +500,9 @@ const extractFileContent = async (file: DriveFile) => {
 
 
 // Lifecycle
-onMounted(() => {
-  loadFiles()
+onMounted(async () => {
+  await loadFiles()
+  await checkSyncStatus()
 })
 </script>
 
