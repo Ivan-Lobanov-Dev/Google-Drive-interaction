@@ -245,4 +245,5 @@ export class DriveService {
     // Support all text types
     return supportedTypes.includes(mimeType) || mimeType.startsWith('text/')
   }
+
 }

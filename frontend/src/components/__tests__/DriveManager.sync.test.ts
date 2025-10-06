@@ -15,6 +15,7 @@ vi.mock('../../services/driveService', () => ({
     updateFile: vi.fn(),
     deleteFile: vi.fn(),
     extractFileContent: vi.fn(),
+    canExtractContent: vi.fn((mimeType) => mimeType.startsWith('text/') || mimeType === 'application/pdf'),
     getFileIcon: vi.fn(() => '📄'),
     formatFileSize: vi.fn((size) => `${size} B`),
     formatDate: vi.fn((date) => new Date(date).toLocaleDateString()),
@@ -154,7 +155,7 @@ describe('DriveManager Sync Protection', () => {
       await wrapper.vm.syncFiles();
 
       expect(DriveService.syncFiles).toHaveBeenCalled();
-      expect(DriveService.getSyncStatus).toHaveBeenCalledTimes(2); // Before and after sync
+      expect(DriveService.getSyncStatus).toHaveBeenCalledTimes(3); // Before, during, and after sync
     });
 
     it('should handle sync already in progress error from backend', async () => {
@@ -192,7 +193,7 @@ describe('DriveManager Sync Protection', () => {
 
       await wrapper.vm.syncFiles();
 
-      expect(DriveService.getSyncStatus).toHaveBeenCalledTimes(2);
+      expect(DriveService.getSyncStatus).toHaveBeenCalledTimes(3);
       expect(wrapper.vm.lastOperation).toBeDefined();
       expect(wrapper.vm.lastOperation.type).toBe('Sync Files');
     });
@@ -212,7 +213,7 @@ describe('DriveManager Sync Protection', () => {
 
       expect(DriveService.resetSyncStatus).toHaveBeenCalled();
       expect(DriveService.getSyncStatus).toHaveBeenCalled();
-      expect(wrapper.vm.error).toBe('');
+      expect(wrapper.vm.error).toBe(null);
     });
 
     it('should handle reset sync error', async () => {
@@ -284,7 +285,7 @@ describe('DriveManager Sync Protection', () => {
 
       await wrapper.vm.syncFiles();
 
-      expect(wrapper.vm.error).toBe('');
+      expect(wrapper.vm.error).toBe(null);
     });
   });
 });

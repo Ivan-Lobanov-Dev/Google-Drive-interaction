@@ -65,7 +65,7 @@ model FileChunk {
   id         String        @id @default(uuid()) @db.Uuid
   fileId     String        @map("file_id")
   text       String
-  embedding  String?
+  embedding  String?       // JSON string for vector embedding (pgvector support)
   chunkIndex Int           @map("chunk_index")
   createdAt  DateTime      @default(now()) @map("created_at")
   file       FilesMetadata @relation(fields: [fileId], references: [id], onDelete: Cascade)
