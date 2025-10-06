@@ -1,5 +1,6 @@
 import { ContentExtractionService } from '../services/contentExtractionService.js';
 import { FileService } from '../services/fileService.js';
+import { RAGService } from '../services/ragService.js';
 import { prisma } from '../lib/prisma.js';
 import type { CloudStorageService, CloudFile } from '../interfaces/cloudStorage.js';
 
@@ -12,6 +13,8 @@ export interface SyncFilesResult {
     contentExtracted: number;
     contentFailed: number;
     totalDeleted: number;
+    filesIndexed: number;
+    indexingErrors: number;
   };
 }
 
@@ -82,15 +85,60 @@ export class DriveUseCases {
       nextPageToken = result.nextPageToken;
     } while (nextPageToken);
 
+    // After sync is complete, index files for RAG search
+    let filesIndexed = 0;
+    let indexingErrors = 0;
+    
+    if (totalSaved > 0) {
+      try {
+        const ragService = new RAGService();
+        
+        // Get files that need indexing (have content but no embeddings)
+        const filesToIndex = await prisma.filesMetadata.findMany({
+          where: {
+            userId: userId,
+            contentFetched: true,
+            chunks: {
+              some: {
+                embedding: null
+              }
+            }
+          },
+          include: {
+            chunks: true
+          }
+        });
+
+        // Index each file
+        for (const file of filesToIndex) {
+          try {
+            const result = await ragService.indexFile(file.id, userId);
+            if (result.success) {
+              filesIndexed += 1;
+            } else {
+              indexingErrors += 1;
+            }
+          } catch {
+            indexingErrors += 1;
+          }
+        }
+      } catch (error) {
+        console.error('Error during RAG indexing:', error);
+        indexingErrors += 1;
+      }
+    }
+
     return {
-      message: 'Files synchronized successfully',
+      message: 'Files synchronized and indexed for AI search',
       stats: {
         totalFetched,
         totalSaved,
         totalSkipped,
         contentExtracted: totalContentExtracted,
         contentFailed: totalContentFailed,
-        totalDeleted
+        totalDeleted,
+        filesIndexed,
+        indexingErrors
       }
     };
   }

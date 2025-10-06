@@ -49,7 +49,7 @@ app.use('/auth', authRouter);
 // Drive routes
 app.use('/api/drive', driveRouter);
 
-// AI routes
+// AI routes (includes RAG functionality)
 app.use('/api/ai', aiRouter);
 
 const PORT = process.env.PORT || 4000;

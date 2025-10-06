@@ -59,6 +59,28 @@ The application will be available at:
 - Frontend: http://localhost:5173
 - Backend: http://localhost:4000
 
+## 🚀 Quick Test Guide
+
+### **Testing the Integrated Sync & RAG System:**
+
+1. **Authenticate** with Google OAuth
+2. **Click "Sync Files"** - this will:
+   - Fetch files from Google Drive
+   - Extract content from supported files
+   - Automatically index files for AI search
+   - Show progress with statistics
+3. **Ask AI questions:**
+   - **Metadata questions**: "How many files do I have?", "What's my largest file?"
+   - **Content questions**: "What does my project plan say?", "Summarize my meeting notes"
+
+### **Example Questions to Test:**
+- `"What files do I have?"` - Tests metadata analysis
+- `"What does the 'Unframe_home_assignment' file say?"` - Tests RAG content search
+- `"Which files are PDFs?"` - Tests file type filtering
+- `"When did I last modify files?"` - Tests date-based queries
+
+**Note:** Content-based questions will only work after files have been synced and indexed. The system will show "No content has been indexed" if you try before syncing.
+
 ## 🧪 Testing
 
 The project includes comprehensive testing with isolated test environment:
@@ -83,6 +105,14 @@ See [TESTING.md](backend/TESTING.md) for detailed testing documentation.
 
 ## End-to-end flow with Data Storage
 Google Drive → Extractor → Chunker → Embedder → Vector Store → Retriever → RAG Orchestrator → AI Provider → Answering → Audit Logging
+
+**🔄 Integrated Sync & Index Flow:**
+1. **Sync Files** from Google Drive (fetches metadata and content)
+2. **Extract Content** from supported file types (PDF, Docs, Sheets, etc.)
+3. **Create Chunks** with intelligent text segmentation
+4. **Generate Embeddings** using OpenAI text-embedding-3-small
+5. **Store in Vector DB** (PostgreSQL + pgvector) for semantic search
+6. **Ready for AI** - files immediately available for RAG queries
 
 ## AI Provider Architecture
 The system implements a modular AI provider architecture that allows easy switching between different AI services:
@@ -121,10 +151,11 @@ const aiService = new AIService(new ClaudeAdapter());
     - **Improvements:** Enhanced chunking algorithm prevents duplicate chunks and ensures optimal text segmentation.
 
 - **Embedder**  
-  - **When:** After chunks are created.  
+  - **When:** Automatically after chunks are created during file synchronization.  
   - **Actions:** Generates vector embeddings for each chunk using the OpenAI embeddings API.  
   - **Where Data is Stored:**  
     - Updates **Chunks table (`file_chunks`)** by filling the `embedding` field (currently stored as string, can be migrated to vector type later).
+  - **Integration:** Part of the unified sync process - no separate indexing step required.
 
 - **Vector Store**  
   - **When:** Immediately after embeddings are generated.  
@@ -160,11 +191,10 @@ const aiService = new AIService(new ClaudeAdapter());
     - **Fallback**: Automatic fallback to alternative providers if primary fails
 
 
-- **Answering & Audit Logging**  
+- **Answering & Response**  
   - **When:** After the LLM generates the answer.  
-  - **Actions:** Returns synthesized answer to the user. Logs the request for security and audit purposes.  
-  - **Where Data is Stored:**  
-    - **Audit table (`audit_logs`)** – stores `user_id`, `query`, `response`, `file_ids` (list of files/chunks used), and `created_at`.
+  - **Actions:** Returns synthesized answer to the user.  
+  - **Note:** Audit logging of user requests is not currently implemented but could be added in the future for analytics and debugging purposes.
 
 
 ## Google Drive Content Extraction:
@@ -255,7 +285,7 @@ Table name: file_chunks
 | chunk_index  | int         | Chunk order within file |
 | created_at   | timestamp   | Creation time           |
 
-Table name: users_request
+~~Table name: users_request~~ (Not implemented - see audit logging section below)
 
 | Column      | Type      | Description                                     |
 | ----------- | --------- | ----------------------------------------------- |
@@ -265,6 +295,8 @@ Table name: users_request
 | response    | text      | AI Response                                     |
 | file\_ids   | JSON      | List of files/chunks that were used             |
 | created\_at | timestamp | Request time                                    |
+
+**Note:** User request audit logging is not currently implemented. This could be added in the future for analytics and debugging purposes, but is not required for the core functionality.
 
 Table name: sync_status
 
@@ -441,7 +473,7 @@ Delete file from Google Drive and database.
 
 ### **POST** /api/drive/sync
 
-Smart synchronization with Google Drive - fetches only modified files since last sync.
+Smart synchronization with Google Drive - fetches only modified files since last sync and automatically indexes them for AI search.
 
 - **Authentication:** Required (session cookie)
 - **Request Body:**
@@ -453,14 +485,16 @@ Smart synchronization with Google Drive - fetches only modified files since last
 - **Response:**
 ```json
 {
-  "message": "Files synchronized successfully",
+  "message": "Files synchronized and indexed for AI search",
   "stats": {
     "totalFetched": 25,
     "totalSaved": 15,
     "totalSkipped": 10,
     "contentExtracted": 12,
     "contentFailed": 3,
-    "totalDeleted": 2
+    "totalDeleted": 2,
+    "filesIndexed": 10,
+    "indexingErrors": 2
   }
 }
 ```
@@ -468,10 +502,13 @@ Smart synchronization with Google Drive - fetches only modified files since last
 **Features:**
 - Automatically determines last sync time if `modifiedAfter` not provided
 - Includes content extraction statistics
+- **🚀 Integrated RAG Indexing:** Automatically indexes files for AI search after sync
+- **📊 Enhanced Statistics:** Shows both sync and indexing results
 - Handles large file sets with pagination
-- Robust error handling for content extraction failures
+- Robust error handling for content extraction and indexing failures
 - **Sync Protection:** Prevents concurrent sync operations for the same user
 - **Status Tracking:** Tracks sync progress and handles stuck syncs
+- **AI-Ready:** Files are immediately ready for content-based AI questions
 
 **Error Responses:**
 - `409 Conflict` - When sync is already in progress
@@ -513,7 +550,10 @@ Reset sync status for the authenticated user (useful for stuck syncs).
 **Features:**
 - 🔍 **Smart Question Detection:** Automatically determines if question is about metadata or content
 - 📊 **Metadata Analysis:** Statistical questions about file properties, sizes, dates, owners  
-- 📚 **Content Search:** Semantic search through file content using RAG
+- 📚 **Content Search:** Semantic search through file content using RAG with vector embeddings
+- 🛡️ **Safety Limits:** Automatic token limit protection (5000 tokens max)
+- 🎯 **User Isolation:** Only searches through user's own documents
+- 🚀 **Seamless Experience:** Files are automatically indexed during sync - no manual setup required
 
 - **Authentication:** Required (session cookie)
 - **Request Body:**
@@ -578,11 +618,9 @@ Reset sync status for the authenticated user (useful for stuck syncs).
 ```
 
 
-## RAG (Retrieval-Augmented Generation) Endpoints
+### **POST** `/api/ai/rag/ingest-plan`
 
-### **POST** /api/ai/rag/ingest-plan
-
-Returns a plan for ingestion based on file criteria.
+**Purpose:** Returns a plan for content ingestion and vector indexing based on file criteria.
 
 - **Authentication:** Required (session cookie)
 - **Request Body:**
@@ -590,35 +628,94 @@ Returns a plan for ingestion based on file criteria.
 {
   "fileIds": ["abc123", "def456"],
   "dateRange": {
-    "start": "2025-01-01",
-    "end": "2025-12-31"
+    "from": "2024-01-01",
+    "to": "2024-12-31"
   },
-  "fileTypes": ["application/pdf", "text/plain"],
-  "owners": ["user@example.com"]
+  "owner": "user@example.com",
+  "fileType": "pdf"
 }
 ```
 
 - **Response:**
 ```json
 {
-  "plan": {
-    "totalFiles": 150,
-    "filesToProcess": 45,
-    "alreadyProcessed": 105,
-    "estimatedChunks": 450,
-    "strategy": "batch",
-    "fileTypes": ["application", "text", "image"],
-    "estimatedTime": "15 minutes",
-    "recommendations": [
-      "Consider processing in smaller batches",
-      "Large files detected - may take longer"
-    ]
-  },
-  "timestamp": "2025-01-15T10:30:00Z"
+  "strategy": "embedding_creation",
+  "totalFiles": 50,
+  "filesNeedingIndexing": 25,
+  "estimatedChunks": 125,
+  "files": [
+    {
+      "id": "file_123",
+      "name": "Report.pdf",
+      "mimeType": "application/pdf",
+      "size": 1024000,
+      "createdAt": "2024-01-15T10:00:00Z",
+      "needsIndexing": true
+    }
+  ],
+  "filters": {
+    "fileIds": ["abc123", "def456"],
+    "dateRange": {...},
+    "owner": "user@example.com",
+    "fileType": "pdf"
+  }
 }
 ```
 
-> **Note:** The `/api/ai/rag/query` endpoint has been moved to the main AI Question Interface section above as the universal endpoint that handles both metadata and content questions.
+
+## RAG (Retrieval-Augmented Generation) System
+
+The system includes a complete RAG implementation for content-based search through user documents with **automatic indexing during sync**:
+
+
+### **🔄 Integrated Workflow:**
+1. **User clicks "Sync Files"** in the UI
+2. **Files are synchronized** from Google Drive
+3. **Content is automatically extracted** and chunked
+4. **Embeddings are generated** using OpenAI API
+5. **Vectors are stored** in PostgreSQL + pgvector
+6. **Files are immediately ready** for AI content-based questions
+
+### **Components:**
+- **Chunker**: Uses existing chunking logic from sync process
+- **Embedder**: OpenAI text-embedding-3-small for vector embeddings
+- **Vector Store**: PostgreSQL with pgvector extension for similarity search
+- **Retriever**: Finds relevant chunks using vector similarity
+- **RAG Orchestrator**: Coordinates pipeline with safety limits
+
+### **Safety Features:**
+- **Token Limit Protection**: Maximum 5000 tokens per query
+- **User Isolation**: Only search through user's own documents
+- **Confidence Scoring**: Similarity-based confidence metrics
+- **Automatic Safety Checks**: Prevents API overuse
+- **Quota Management**: Graceful handling of OpenAI API quota limits
+
+### **User Experience:**
+- **Zero Configuration**: No manual setup required
+- **One-Click Ready**: Files are indexed automatically during sync
+- **Real-time Feedback**: Progress indicators show sync and indexing status
+- **Error Handling**: Clear messages for quota issues or indexing failures
+
+### **Database Schema for RAG:**
+
+The `file_chunks` table has been extended to support vector embeddings:
+
+```sql
+-- Enable pgvector extension (required)
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+### **Configuration:**
+```typescript
+export const RAG_CONFIG = {
+  maxTokens: 5000,           // Maximum tokens to send to OpenAI
+  maxResults: 10,            // Maximum chunks to retrieve
+  similarityThreshold: 0.7,  // Minimum similarity score
+  embeddingModel: 'text-embedding-3-small',
+  chunkSize: 800,            // Characters per chunk (from existing sync)
+  chunkOverlap: 50,          // Overlap between chunks (from existing sync)
+};
+```
 
 ## AI Provider Architecture
 
@@ -640,12 +737,9 @@ interface AIProvider {
 - **Token refresh** automatically handled when access tokens expire
 - **User identification** through `users` table linked to Google OAuth user IDs
 - **ACL check** is performed before returning chunks based on user sessions and file ownership
-- **Audit logging** stores:
-  - who made the request (`userId` from sessions table)
-  - timestamp
-  - which files/chunks were accessed
-  - user query and AI response
+- **User isolation**: each user can only access their own files and content
 - **Metadata analytics**: global queries are safe because they do not expose file content
+- **Note**: Audit logging of user requests is not currently implemented but could be added in the future
 - **Environment security**: OAuth credentials stored in separate `.env.oauth` file excluded from version control
 
 # 5. Scalability & Performance

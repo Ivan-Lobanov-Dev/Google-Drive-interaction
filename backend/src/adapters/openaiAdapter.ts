@@ -206,7 +206,7 @@ Answer based on this data.`;
   /**
    * Parse AI response and extract structured data
    */
-  private parseAIResponse(response: string, files: DriveFileData[], question?: string): AIResponse {
+  private parseAIResponse(response: string, files: DriveFileData[], _question?: string): AIResponse {
     // Generate statistics from files
     const statistics = this.generateFileStatistics(files);
     

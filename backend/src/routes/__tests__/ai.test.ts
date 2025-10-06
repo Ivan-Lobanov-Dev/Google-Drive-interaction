@@ -96,35 +96,6 @@ describe('AI Routes', () => {
     vi.resetAllMocks();
   });
 
-  describe('POST /api/ai/rag/ingest-plan', () => {
-    it('should return 501 Not Implemented', async () => {
-      const response = await request(app)
-        .post('/api/ai/rag/ingest-plan')
-        .send({
-          fileIds: ['file1', 'file2'],
-          dateRange: {
-            start: '2024-01-01',
-            end: '2024-12-31'
-          }
-        })
-        .expect(501);
-
-      expect(response.body).toHaveProperty('error', 'Not implemented yet');
-      expect(response.body).toHaveProperty('message');
-      expect(response.body).toHaveProperty('currentCapability');
-    });
-
-    it('should return 501 even when authenticated (not implemented)', async () => {
-      // The endpoint always returns 501 regardless of authentication status
-      // since it's not implemented yet
-      const response = await request(app)
-        .post('/api/ai/rag/ingest-plan')
-        .send({})
-        .expect(501);
-
-      expect(response.body).toHaveProperty('error', 'Not implemented yet');
-    });
-  });
 
   describe('POST /api/ai/rag/query', () => {
     it.skip('should handle metadata questions', async () => {
