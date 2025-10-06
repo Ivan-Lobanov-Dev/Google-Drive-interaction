@@ -64,6 +64,9 @@
           <span v-if="lastOperation.stats.contentFailed !== undefined && lastOperation.stats.contentFailed > 0" class="error-stat">
             Content Failed: {{ lastOperation.stats.contentFailed }}
           </span>
+          <span v-if="lastOperation.stats.filesIndexed !== undefined" class="indexed-stat">
+            Files Indexed for AI: {{ lastOperation.stats.filesIndexed }}
+          </span>
         </div>
       </div>
     </div>
@@ -93,14 +96,14 @@
           :class="{ 'file-starred': file.extraMetadata?.starred }"
         >
           <div class="file-icon">
-            {{ DriveService.getFileIcon(file.mimeType) }}
+            {{ getFileIcon(file.mimeType) }}
           </div>
           
           <div class="file-info">
             <h3 class="file-name" :title="file.name">{{ file.name }}</h3>
             <p class="file-details">
-              <span class="file-size">{{ DriveService.formatFileSize(file.size) }}</span>
-              <span class="file-date">{{ DriveService.formatDate(file.modifiedTime) }}</span>
+              <span class="file-size">{{ formatFileSize(file.size) }}</span>
+              <span class="file-date">{{ formatDate(file.modifiedTime) }}</span>
             </p>
             <p class="file-owner">{{ file.owner }}</p>
           </div>
@@ -115,7 +118,7 @@
               👁️
             </button>
             <button
-              v-if="DriveService.canExtractContent(file.mimeType)"
+              v-if="canExtractContent(file.mimeType)"
               @click="extractFileContent(file)"
               class="action-btn extract-btn"
               :title="file.contentFetched ? 'Re-extract content' : 'Extract content'"
@@ -227,7 +230,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { DriveService } from '../services/driveService'
 import type { DriveFile, DriveFilesFilters } from '../types/drive'
 
@@ -346,11 +349,28 @@ const syncFiles = async () => {
     loading.sync = true
     error.value = null
     
+    // Sync files from Google Drive (now includes automatic indexing)
     const response = await DriveService.syncFiles()
-    lastOperation.value = {
-      type: 'Sync Files',
-      message: response.message,
-      stats: response.stats
+    
+    // Show sync and indexing results
+    if (response.stats && response.stats.filesIndexed !== undefined) {
+      // New integrated sync with indexing
+      const hasIndexingErrors = response.stats.indexingErrors > 0
+      
+      lastOperation.value = {
+        type: hasIndexingErrors ? 'Sync Complete (Indexing Issues)' : 'Sync & Index Complete',
+        message: hasIndexingErrors 
+          ? `Files synced successfully. ${response.stats.filesIndexed} files indexed for AI search. ${response.stats.indexingErrors} files failed to index.`
+          : `Files synced and indexed for AI search. ${response.stats.filesIndexed} files ready for AI questions.`,
+        stats: response.stats
+      }
+    } else {
+      // Fallback for old response format
+      lastOperation.value = {
+        type: 'Sync Files',
+        message: response.message,
+        stats: response.stats
+      }
     }
     
     // Refresh the files list after sync
@@ -400,7 +420,7 @@ const getVisiblePages = (): number[] => {
     // Show smart pagination with ellipsis
     const half = Math.floor(maxVisible / 2)
     let start = Math.max(1, page - half)
-    let end = Math.min(totalPages, start + maxVisible - 1)
+    const end = Math.min(totalPages, start + maxVisible - 1)
     
     // Adjust start if we're near the end
     if (end - start < maxVisible - 1) {
@@ -504,6 +524,12 @@ onMounted(async () => {
   await loadFiles()
   await checkSyncStatus()
 })
+
+// Expose DriveService methods to template
+const canExtractContent = (mimeType: string) => DriveService.canExtractContent(mimeType)
+const getFileIcon = (mimeType: string) => DriveService.getFileIcon(mimeType)
+const formatFileSize = (size?: string) => DriveService.formatFileSize(size)
+const formatDate = (dateString: string) => DriveService.formatDate(dateString)
 </script>
 
 <style scoped>
@@ -665,6 +691,11 @@ onMounted(async () => {
 
 .error-stat {
   color: #dc3545 !important;
+  font-weight: 500;
+}
+
+.indexed-stat {
+  color: #28a745 !important;
   font-weight: 500;
 }
 

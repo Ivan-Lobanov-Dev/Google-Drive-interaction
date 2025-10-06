@@ -138,7 +138,7 @@ describe('Drive Sync Protection E2E', () => {
         .set('Cookie', `sessionId=${testSessionId}`)
         .expect(200);
 
-      expect(secondSyncResponse.body.message).toBe('Files synchronized successfully');
+      expect(secondSyncResponse.body.message).toBe('Files synchronized and indexed for AI search');
     });
 
     it('should track sync status throughout the process', async () => {
